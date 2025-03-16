@@ -1,3 +1,5 @@
+// Compile: gcc -o DnD CharSheet.c -DNCURSES_WIDECHAR=1 -lncursesw -lpanel
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
