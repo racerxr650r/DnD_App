@@ -36,8 +36,9 @@ wchar_t frame_symbols[8][10] = {
 };
 
 // Macros *********************************************************************
-#define top_window              next
-#define bottom_window           prev
+#define top_window      next
+#define bottom_window   prev
+#define KEY_ESC         27
 
 // Data Types *****************************************************************
 typedef int (*Create_App_Windows)(void);
@@ -47,6 +48,8 @@ struct window_t;
 struct component_t;
 
 typedef int (*Initialize_Window)(struct window_t *win);
+typedef int (*Configure_Window)(struct window_t *win);
+typedef void (*Set_Cursor_Window)(struct window_t *win, bool enable);
 typedef void (*Frame_Window)(struct window_t *win);
 typedef void (*Update_Window)(struct window_t *win);
 typedef int  (*Input_Window)(struct window_t *win, int input);
@@ -64,9 +67,9 @@ typedef void (*Move_Up_Window)(struct window_t *win);
 typedef void (*Move_Down_Window)(struct window_t *win);
 typedef int (*Print_Window)(struct window_t *win, int row, int col, const char *format, va_list args);
 typedef int (*Write_Window)(struct window_t *win, struct window_t *this);
-typedef void (*Notification_Window)(struct window_t *win);
+typedef void (*Notify_Window)(struct window_t *win);
 
-typedef void (*Display_Component)(struct component_t *component);
+typedef void (*Update_Component)(struct component_t *component);
 typedef int  (*Input_Component)(struct component_t *component,int input);
 typedef void (*Focus_Component)(struct component_t *component);
 typedef void (*Destroy_Component)(struct component_t *component);
@@ -75,7 +78,7 @@ typedef void (*Remove_Component)(struct window_t *win, struct component_t *compo
 typedef void (*Set_Focus_Component)(struct component_t *component);
 typedef void (*Readonly_Component)(struct component_t *component);
 typedef void (*Set_Format_Component)(struct component_t *component, const char *format);
-typedef void (*Notification_Component)(struct component_t *component);
+typedef void (*Notify_Component)(struct component_t *component);
 
 // UI Window
 typedef enum
@@ -105,6 +108,13 @@ typedef enum
     BOTTOM_BREAK
 }Frame_Symbol;
 
+typedef enum
+{
+    CURSOR_NONE,
+    CURSOR_INSERT,
+    CURSOR_OVERWRITE
+}Cursor_Type;
+
 typedef struct window_t
 {
     wchar_t *buffer;
@@ -113,9 +123,15 @@ typedef struct window_t
     int     col;
     int     height;
     int     width;
-    bool    wrap;
-    bool    stale;
-    Window_Frame frame_type;
+
+    int         cur_row;
+    int         cur_col;
+    Cursor_Type cursor_type;
+
+    bool            insert_key;
+    bool            wrap;
+    bool            stale;
+    Window_Frame    frame_type;
 
     struct component_t *component_head;
     struct component_t *component_tail;
@@ -126,6 +142,7 @@ typedef struct window_t
     struct window_t *next;
 
     Initialize_Window   initialize;
+    Configure_Window    configure;
     Frame_Window        frame;
     Update_Window       update;
     Input_Window        input;
@@ -136,6 +153,7 @@ typedef struct window_t
     Stale_Window        set_stale;
 
     Set_Focus_Window    set_focus;
+    Set_Cursor_Window   set_cursor;
     Next_Focus_Window   next_focus;
     Prev_Focus_Window   prev_focus;
     Move_Top_Window     move_top;
@@ -145,14 +163,13 @@ typedef struct window_t
     Print_Window        print;
     Write_Window        write;
 
-    Input_Window        notification_input;
-    Input_Window        notification_action;
-    Notification_Window notification_tick;
-    Notification_Window notification_stale;
-    Notification_Window notification_focus;
-    Notification_Window notification_update;
-    Notification_Window notification_destroy;
-
+    Input_Window  notify_input;
+    Input_Window  notify_action;
+    Notify_Window notify_tick;
+    Notify_Window notify_stale;
+    Notify_Window notify_focus;
+    Notify_Window notify_update;
+    Notify_Window notify_destroy;
 }Window;
 
 Window *allocate_window(int row, int col, int height, int width, char *label, bool box);
@@ -172,6 +189,14 @@ static inline void set_focus_window(Window *this, struct component_t *component)
         if(this->set_focus != NULL)
             this->set_focus(this, component);
     return;
+}
+
+static inline void set_cursor_window(Window *this, bool enable)
+{
+    if(this != NULL)
+        if(this->set_cursor != NULL)
+            this->set_cursor(this, enable);
+    return;    
 }
 
 static inline void set_stale_window(Window *this)
@@ -219,7 +244,7 @@ typedef struct component_t
     struct component_t *prev;
     struct component_t *next;
 
-    Display_Component   display;
+    Update_Component    update;
     Input_Component     input;
     Focus_Component     focus;
 
@@ -230,14 +255,14 @@ typedef struct component_t
     Readonly_Component  read_only;
     Set_Format_Component set_format;
 
-    Input_Component     notification_input;
-    Input_Component     notification_action;
-    Notification_Component notification_tick;
-    Notification_Component notification_focus;
-    Notification_Component notification_destroy;
+    Input_Component  notify_input;
+    Input_Component  notify_action;
+    Notify_Component notify_tick;
+    Notify_Component notify_focus;
+    Notify_Component notify_destroy;
 }Component;
 
-Component *create_component(Component *component, Window *win, int row, int col, int height, int width, char *label);
+Component *create_component(Component *component, Window *win, int row, int col, int height, int width, const char *label);
 
 static inline void read_only_component(Component *this)
 {
@@ -300,6 +325,7 @@ typedef struct string_t
 {
     Component   base;
     char        *value;
+    int         cursor_offset;
     int         size_max;
 }String;
 Component *create_string(Window *win, int row, int col, int width, char *label, char *value, int size_max);
@@ -312,6 +338,8 @@ typedef struct integer_t
 {
     Component   base;
     int         *value;
+    char        field[21];
+    int         cursor_offset;
 }Integer;
 Component *create_integer(Window *win, int row, int col, int width, char *label, int *value);
 
@@ -337,7 +365,7 @@ static inline void set_timer(Timer *timer, unsigned int msecs)
 }
 
 
-Window *create_screen(Initialize_Window create_all_windows, Input_Window app_input);
+Window *create_screen();
 int run_screen(Window *screen);
 int input_screen(Window **this);
 

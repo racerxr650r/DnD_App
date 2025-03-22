@@ -1,4 +1,5 @@
 // Compile: gcc -o DnD CharSheet.c -DNCURSES_WIDECHAR=1 -lncursesw -lpanel
+#define __STDC_WANT_LIB_EXT2__ 1  //Define you want TR 24731-2:2010 extensions
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,7 +8,7 @@
 #include "CharSheet.h"
 
 // Internal Function Prototypes ***********************************************
-void display_error_popup(const char *error_message, int milliseconds);
+void display_error_popup(Window *win, const char *error_message, int milliseconds);
 void display_message_popup(Window *win,const char *message, int milliseconds);
 
 int calculate_modifier(int score, int proficiency_modifier);
@@ -35,7 +36,7 @@ Window *create_notes_window(Window *screen);
 Character character;
 
 // Main Function **************************************************************
-int main() 
+int main(int argc, char *argv[]) 
 {
     int ret;
     Spell **spells = NULL;
@@ -49,12 +50,15 @@ int main()
     memset(&character, 0, sizeof(Character));
 
     // Create all app windows and register global app input handler
-    Window *screen = create_screen(create_app_windows, app_input);
+    Window *screen = create_screen();
+    screen->configure = create_app_windows;
+    screen->notify_input = app_input;
+
 
     if(screen != NULL)
     {
         // Hook the update notification to calculate all dependencies
-        screen->notification_update = calculate_dependencies;
+        screen->notify_update = calculate_dependencies;
 
         // Run the screen
         run_screen(screen);
@@ -90,9 +94,11 @@ int app_input(Window *screen, int input)
     switch(input)
     {
         case KEY_RIGHT:
+        case KEY_NPAGE:
             screen->top_window->move_bottom(screen->top_window);
             break;
         case KEY_LEFT:
+        case KEY_PPAGE:
             screen->bottom_window->move_top(screen->bottom_window);
             break;
         case KEY_SAVE_CHARACTER: // Save (ctl-s)
@@ -230,7 +236,7 @@ Window *create_character_window(Window *screen)
     // Display character abilities
     create_text(win,row++,right_column_start,"Ability  Mod Save Proficient");
     this = create_integer(win,row,right_column_start,2,"STR: ",&character.abilities.strength.score);
-    this->notification_input = input_ability;
+    this->notify_input = input_ability;
     this = create_integer(win,row,right_column_start+7,2,NULL, &character.abilities.strength.modifier);
     read_only_component(this);
     set_format_component(this,"%s (%+d)");
@@ -242,7 +248,7 @@ Window *create_character_window(Window *screen)
     ((Checkbox *)this)->true_string = "P";
     
     this = create_integer(win,row,right_column_start,2,"DEX: ",&character.abilities.dexterity.score);
-    this->notification_input = input_ability;
+    this->notify_input = input_ability;
     this = create_integer(win,row,right_column_start+7,2,NULL, &character.abilities.dexterity.modifier);
     read_only_component(this);
     set_format_component(this,"%s (%+d)");
@@ -254,7 +260,7 @@ Window *create_character_window(Window *screen)
     ((Checkbox *)this)->true_string = "P";
 
     this = create_integer(win,row,right_column_start,2,"CON: ",&character.abilities.constitution.score);
-    this->notification_input = input_ability;
+    this->notify_input = input_ability;
     this = create_integer(win,row,right_column_start+7,2,NULL, &character.abilities.constitution.modifier);
     read_only_component(this);
     set_format_component(this,"%s (%+d)");
@@ -266,7 +272,7 @@ Window *create_character_window(Window *screen)
     ((Checkbox *)this)->true_string = "P";
 
     this = create_integer(win,row,right_column_start,2,"INT: ",&character.abilities.intelligence.score);
-    this->notification_input = input_ability;
+    this->notify_input = input_ability;
     this = create_integer(win,row,right_column_start+7,2,NULL, &character.abilities.intelligence.modifier);
     read_only_component(this);
     set_format_component(this,"%s (%+d)");
@@ -278,7 +284,7 @@ Window *create_character_window(Window *screen)
     ((Checkbox *)this)->true_string = "P";
 
     this = create_integer(win,row,right_column_start,2,"WIS: ",&character.abilities.wisdom.score);
-    this->notification_input = input_ability;
+    this->notify_input = input_ability;
     this = create_integer(win,row,right_column_start+7,2,NULL, &character.abilities.wisdom.modifier);
     read_only_component(this);
     set_format_component(this,"%s (%+d)");
@@ -290,7 +296,7 @@ Window *create_character_window(Window *screen)
     ((Checkbox *)this)->true_string = "P";
 
     this = create_integer(win,row,right_column_start,2,"CHA: ",&character.abilities.charisma.score);
-    this->notification_input = input_ability;
+    this->notify_input = input_ability;
     this = create_integer(win,row,right_column_start+7,2,NULL, &character.abilities.charisma.modifier);
     read_only_component(this);
     set_format_component(this,"%s (%+d)");
@@ -463,6 +469,18 @@ Window *create_notes_window(Window *screen)
 }
 
 // Windows Frameworks UI ******************************************************
+int initialize_screen_method(Window *this)
+{
+    // Configure ncurses
+    raw();
+    cbreak();
+    noecho();
+    keypad(stdscr, TRUE);
+    start_color(); 
+    
+    return(0);
+}
+
 void destroy_screen_method(Window *this)
 {
     // Turn off ncurses
@@ -482,8 +500,8 @@ void update_screen_method(Window *this)
     bool    stale = false;
 
     // If the screen has an update notification...
-    if(this->notification_update)
-        this->notification_update(this);
+    if(this->notify_update)
+        this->notify_update(this);
 
     while(win != NULL)
     {
@@ -503,20 +521,46 @@ int write_screen_method(Window *dest, Window *src)
     if(src == NULL)
         return(0);
 
-    // Get the current cursor location
-    int row, col;
-    getyx(stdscr,row,col);
-
     // Write the root window to the screen
     int count = mvaddwstr(0,0,src->buffer);
-    // Mark the screen as fresh
-    src->stale = false;
 
-    // Restore the cursor location
-    move(row,col);
+    // Set the cursor type
+    switch (src->cursor_type)
+    {
+        case CURSOR_NONE:
+            curs_set(0); // Hide the cursor
+            break;
+        case CURSOR_INSERT:
+            curs_set(1); // Show the cursor
+            // Set to beem cursor
+            if (is_term_resized(LINES, COLS) == FALSE)
+            {
+                printf("\033[5 q"); // Set to beem cursor
+                fflush(stdout);
+            }
+            move(src->cur_row, src->cur_col);
+            break;
+        case CURSOR_OVERWRITE:
+            curs_set(1); // Show the cursor
+            // Set to block cursor
+            if (is_term_resized(LINES, COLS) == FALSE)
+            {
+                printf("\033[1 q"); // Set to block cursor
+                fflush(stdout);
+            }
+            move(src->cur_row, src->cur_col);
+            break;
+        default:
+            curs_set(0); // Hide the cursor
+            break;
+    }
+    // Set the cursor position
+    move(src->cur_row,src->cur_col);
 
     // Refresh the screen
     refresh();
+    // Mark the screen as fresh
+    src->stale = false;
 
     return(count);
 }
@@ -529,14 +573,14 @@ void tick(Window *screen)
     Window *win = screen->bottom_window;
     while(win != NULL)
     {
-        if(win->notification_tick)
-            win->notification_tick(win);
+        if(win->notify_tick)
+            win->notify_tick(win);
 
         Component *component = win->component_head;
         while(component)
         {
-            if(component->notification_tick)
-                component->notification_tick(component);
+            if(component->notify_tick)
+                component->notify_tick(component);
             component = component->next;
         }
         win = win->next;
@@ -550,6 +594,16 @@ int run_screen(Window *screen)
 
     int result;
 
+    // If the screen has an initialize handler...
+    if(screen->initialize != NULL)
+        if(screen->initialize(screen) < 0)
+            return(-1);
+
+    // If the screen has a configure handler...
+    if(screen->configure)
+        if(screen->configure(screen) < 0)
+            return(-1);
+        
     do
     {
         Window *top;
@@ -582,30 +636,39 @@ int run_screen(Window *screen)
         }
         nodelay(stdscr,FALSE);
 
-
         // If the screen has been resized...
         if(ch == KEY_RESIZE)
         {
-            Initialize_Window create_app_windows = screen->initialize;
-            Input_Window app_input = screen->input;
-            void *notification_input = screen->notification_input;
-            void *notification_update = screen->notification_update;
-            void *notification_destroy = screen->notification_destroy;
-            void *notification_focus = screen->notification_focus;
-            void *notification_stale = screen->notification_stale;
-            void *notification_action = screen->notification_action;
-            void *notification_tick = screen->notification_tick;
+            // Save the state of the user handlers
+            Configure_Window configure = screen->configure;
+            void *notify_input = screen->notify_input;
+            void *notify_update = screen->notify_update;
+            void *notify_destroy = screen->notify_destroy;
+            void *notify_focus = screen->notify_focus;
+            void *notify_stale = screen->notify_stale;
+            void *notify_action = screen->notify_action;
+            void *notify_tick = screen->notify_tick;
 
             // Tear it all down and rebuild for new screen size
             destroy_screen(screen);
-            screen = create_screen(create_app_windows, app_input);
-            screen->notification_action = notification_action;
-            screen->notification_input = notification_input;
-            screen->notification_update = notification_update;
-            screen->notification_destroy = notification_destroy;
-            screen->notification_focus = notification_focus;
-            screen->notification_stale = notification_stale;
-            screen->notification_tick = notification_tick;
+            if((screen = create_screen()) < 0)
+                return(-1);
+
+            // Restore the state of the user handlers
+            screen->configure = configure;
+            screen->notify_action = notify_action;
+            screen->notify_input = notify_input;
+            screen->notify_update = notify_update;
+            screen->notify_destroy = notify_destroy;
+            screen->notify_focus = notify_focus;
+            screen->notify_stale = notify_stale;
+            screen->notify_tick = notify_tick;
+
+            // If configure handler has been defined...
+            if(screen->configure)
+                if(screen->configure(screen) < 0)
+                    return(-1);
+
             result = 1;
         }
         else
@@ -626,12 +689,9 @@ int run_screen(Window *screen)
     return(0);
 }
 
-Window *create_screen(Initialize_Window create_app_windows, Input_Window app_input)
+Window *create_screen()
 {
     Window *screen = NULL;
-
-    if(create_app_windows == NULL)
-        return(NULL);
 
     // Initialize Ncurses
     initscr();
@@ -639,26 +699,12 @@ Window *create_screen(Initialize_Window create_app_windows, Input_Window app_inp
     // If allocating the screen buffer is successful...
     if((screen = allocate_window(0, 0, LINES, COLS, NULL, false)) != NULL)
     {
+        screen->initialize = initialize_screen_method;
         screen->update = update_screen_method;
         screen->write = write_screen_method;
-        screen->input = app_input;
-        screen->initialize = create_app_windows;
         screen->destroy = destroy_screen_method;
 
-        // If creating the application windows is successful...
-        if(!screen->initialize(screen))
-        {
-            // Configure ncurses
-            raw();
-            cbreak();
-            noecho();
-            keypad(stdscr, TRUE);
-            start_color();
-            // init_pair(1, COLOR_CYAN, COLOR_BLACK)
-            return(screen);
-        }
-        else
-            free(screen);
+        return(screen);
     }
 
     endwin();
@@ -705,8 +751,10 @@ void update_window(Window *this)
 
     frame_window(this);
 
+    // If this window has a label...
     if(this->label != NULL)
     {
+        // Display the window label in the top middle
         int offset = (this->width - strlen(this->label)) / 2;
         print_window(this, 0, offset, "%s", this->label);
         if(this->frame_type != FRAME_NONE)
@@ -720,19 +768,25 @@ void update_window(Window *this)
     Component *component = this->component_head;
     while(component)
     {
-        if(component->display != NULL)
-            component->display(component);
+        if(component->update != NULL)
+            component->update(component);
         component = component->next;
     }
 
-    // Set the focus component
-    if(this->focus != NULL)
+    // If there is a component with focus...
+    /*if(this->focus != NULL)
+    {
+        // Set the focus component
         if(this->focus->focus != NULL)
             this->focus->focus(this->focus);
+    }
+    // Else there is no component with focus...
+    else if(this->set_cursor)
+        this->set_cursor(this, false);*/
 
     // If this window has an update notification...
-    if(this->notification_update)
-        this->notification_update(this);
+    if(this->notify_update)
+        this->notify_update(this);
 }
 
 int write_window_method(Window *win, Window *this)
@@ -747,7 +801,6 @@ int write_window_method(Window *win, Window *this)
     if(max_row > win->height - this->row)
         max_row = win->height - this->row;
 
-    int min_col = 0;
     int max_col = this->width;
     if(max_col > win->width - this->col)
         max_col = win->width - this->col;
@@ -760,6 +813,11 @@ int write_window_method(Window *win, Window *this)
         memcpy(&win->buffer[dest_pos], &this->buffer[source_pos], max_col * sizeof(wchar_t));
         copy_count += max_col;
     }
+
+    // Update the cursor state and location
+    win->cursor_type = this->cursor_type;
+    win->cur_row = this->cur_row + this->row;
+    win->cur_col = this->cur_col + this->col;    
 
     // Mark the source window fresh
     this->stale = false;
@@ -784,9 +842,9 @@ int input_window(Window *this, int ch)
         if(component->input)
         {
             // If this component has an input notification...
-            if(component->notification_input)
+            if(component->notify_input)
                 // If the input notification consumed the key...
-                if(result = component->notification_input(component,ch))
+                if(result = component->notify_input(component,ch))
                     return(result);
 
             // If the input is consumed by the component...
@@ -795,18 +853,23 @@ int input_window(Window *this, int ch)
         }
 
     // If there is an input notification...
-    if(this->notification_input)
+    if(this->notify_input)
         // If the input is consumed...
-        if(result = this->notification_input(this,ch))
+        if(result = this->notify_input(this,ch))
             return(result);
 
     // The window attempts to consume the input
     switch (ch)
     {
+        case KEY_IC:
+            this->insert_key ^= true;
+            this->cursor_type = this->insert_key ? CURSOR_INSERT : CURSOR_OVERWRITE;
+            break;
         case KEY_BTAB:
             this->prev_focus(this);
             break;
         case '\t':
+        case KEY_ENTER:
             this->next_focus(this);
             break;
         default:
@@ -846,8 +909,8 @@ int add_window(Window *screen, Window *this)
     set_stale_window(this);
     this->screen = screen;
 
-    if(this->notification_focus)
-        this->notification_focus(this);
+    if(this->notify_focus)
+        this->notify_focus(this);
 
     return(0);
 }
@@ -901,8 +964,8 @@ void remove_window(Window *this)
         screen->top_window = screen->top_window->prev;
 
         // Notify the new top window
-        if(screen->top_window->notification_focus)
-            screen->top_window->notification_focus(screen->top_window);
+        if(screen->top_window->notify_focus)
+            screen->top_window->notify_focus(screen->top_window);
     }
     // Else if this is a window in the middle of the list...
     else if(this->prev != NULL && this->next != NULL)
@@ -929,8 +992,8 @@ void stale_window_method(Window *this)
         this->stale = true;
         
         // If this window has a stale notification...
-        if(this->notification_stale)
-            this->notification_stale(this);
+        if(this->notify_stale)
+            this->notify_stale(this);
 
         this = this->next;
     }
@@ -942,8 +1005,8 @@ void destroy_window(Window *this)
         return;
 
     // If this window has a destroy notification...
-    if(this->notification_destroy)
-        this->notification_destroy(this);
+    if(this->notify_destroy)
+        this->notify_destroy(this);
     
     // Mark all the windows as stale
     set_stale_window(this->screen->bottom_window);
@@ -956,6 +1019,15 @@ void destroy_window(Window *this)
     free(this);
 }
 
+void set_cursor_window_method(Window *this, bool enable)
+{
+    if(this == NULL)
+        return;
+
+    this->cursor_type = enable ? (this->insert_key ? CURSOR_INSERT : CURSOR_OVERWRITE) : CURSOR_NONE;
+    set_stale_window(this);
+}
+
 void set_focus_window_method(Window *this, Component *component)
 {
     if(this == NULL || component == NULL || component->focus == NULL)
@@ -965,9 +1037,10 @@ void set_focus_window_method(Window *this, Component *component)
     this->focus = component;
 
     // Set the component focus
-    component->focus(component);
-    if(component->notification_focus)
-        component->notification_focus(component);
+    if(component->focus)
+        component->focus(component);
+    if(component->notify_focus)
+        component->notify_focus(component);
 
     // Mark the window to be redrawn
     set_stale_window(this);
@@ -1208,6 +1281,10 @@ Window *allocate_window(int row, int col, int height, int width, char *label, bo
     window->col = col;
     window->height = height;
     window->width = width;
+    window->cur_row = 0;
+    window->cur_col = 0;
+    window->cursor_type = CURSOR_NONE;
+    window->insert_key = true;
     window->label = label;
     window->focus = NULL;
     window->wrap = false;
@@ -1216,6 +1293,7 @@ Window *allocate_window(int row, int col, int height, int width, char *label, bo
     window->screen = NULL;
 
     window->initialize = NULL;
+    window->configure = NULL;
     window->frame = frame_window_method;
     window->update = update_window;
     window->write = write_window_method;
@@ -1226,6 +1304,7 @@ Window *allocate_window(int row, int col, int height, int width, char *label, bo
     window->insert = insert_window;
     window->remove = remove_window;
     window->set_stale = stale_window_method;
+    window->set_cursor = set_cursor_window_method;
     window->set_focus = set_focus_window_method;
     window->next_focus = next_focus_window;
     window->prev_focus = prev_focus_window;
@@ -1235,13 +1314,13 @@ Window *allocate_window(int row, int col, int height, int width, char *label, bo
     window->move_down = move_bottom_window;
     window->print = print_window_method;
 
-    window->notification_action = NULL;
-    window->notification_input = NULL;
-    window->notification_tick = NULL;
-    window->notification_stale = NULL;
-    window->notification_focus = NULL;
-    window->notification_update = NULL;
-    window->notification_destroy = NULL;
+    window->notify_action = NULL;
+    window->notify_input = NULL;
+    window->notify_tick = NULL;
+    window->notify_stale = NULL;
+    window->notify_focus = NULL;
+    window->notify_update = NULL;
+    window->notify_destroy = NULL;
 
     window->next = NULL;
     window->prev = NULL;
@@ -1352,7 +1431,7 @@ void set_format_component_method(Component *component, const char *format)
     component->format = format;
 }
 
-Component *create_component(Component *component, Window *win, int row, int col, int height, int width, char *label)
+Component *create_component(Component *component, Window *win, int row, int col, int height, int width, const char *label)
 {
     if(component == NULL || win == NULL)
         return(NULL);
@@ -1372,7 +1451,7 @@ Component *create_component(Component *component, Window *win, int row, int col,
     component->prev = NULL;
     component->next = NULL;
 
-    component->display = NULL;
+    component->update = NULL;
     component->input = NULL;
     component->focus = NULL;
     
@@ -1383,11 +1462,11 @@ Component *create_component(Component *component, Window *win, int row, int col,
     component->read_only = read_only_component_method;
     component->set_format = set_format_component_method;
 
-    component->notification_action = NULL;
-    component->notification_input = NULL;
-    component->notification_tick = NULL;
-    component->notification_focus = NULL;
-    component->notification_destroy = NULL;
+    component->notify_action = NULL;
+    component->notify_input = NULL;
+    component->notify_tick = NULL;
+    component->notify_focus = NULL;
+    component->notify_destroy = NULL;
 
     // Add the component to the window
     component->add(component->parent, component);
@@ -1395,12 +1474,9 @@ Component *create_component(Component *component, Window *win, int row, int col,
     return(component);
 }
 
-void display_list(Component *base)
+void update_list(Component *base)
 {
     List *list = (List *)base;
-
-    int cursor_x,cursor_y;
-    getyx(stdscr,cursor_y,cursor_x);
 
     // If the selected item below the currently displayed section of list...
     if(list->top_visible > list->selected)
@@ -1415,16 +1491,12 @@ void display_list(Component *base)
     int row = base->row;
     int col = base->col;
 
-    //base->parent->print(base->parent,row++,col,"%s---",base->label);
     print_window(base->parent,row++,col,"%s---",base->label);
 
 
     // Display the rows of items visible
     for(int i = list->top_visible; i < list->size && i < list->top_visible+base->height; i++)
         print_window(base->parent,row++,col,"%.*s", base->width, &list->items[i*list->size_max]);
-        //base->parent->print(base->parent,row++,col,"%.*s", base->width, &list->items[i*list->size_max]);
-
-    wmove(stdscr,cursor_y,cursor_x);
 }
 
 int input_list(Component *base, int ch)
@@ -1450,7 +1522,7 @@ int input_list(Component *base, int ch)
             else if(list->size == LIST_MAX_SIZE)
             {
                 --list->selected;
-                display_error_popup("Max List Items Reached",MESSAGE_DURATION);
+                display_error_popup(base->parent->screen, "Max List Items Reached",MESSAGE_DURATION);
             }
             break;
         default:
@@ -1467,7 +1539,10 @@ void focus_list(Component *base)
 {
     List *list = (List *)base;
 
-    wmove(stdscr,base->row+list->selected-list->top_visible+1,base->col);
+    //wmove(stdscr,base->row+list->selected-list->top_visible+1,base->col);
+    base->parent->cur_row = base->row+list->selected-list->top_visible+1;
+    base->parent->cur_col = base->col;
+    set_cursor_window(base->parent,true);
 }
 
 Component *create_list(Window *win, int row, int col, int height, int width, char *label, char *items, int size_max)
@@ -1497,17 +1572,17 @@ Component *create_list(Window *win, int row, int col, int height, int width, cha
     while(list->items[i++ * list->size_max] != 0);
     list->size = i;
 
-    base->display = display_list;
+    base->update = update_list;
     base->input = input_list;
     base->focus = focus_list;
 
     // Set the focus to this new component
-    base->focus(base);
+    set_focus_window(win,base);
 
     return((Component*)list);
 }
 
-void display_checkbox(Component *base)
+void update_checkbox(Component *base)
 {
     Checkbox *cb = (Checkbox *)base;
 
@@ -1536,7 +1611,9 @@ int input_checkbox(Component *base, int ch)
 
 void focus_checkbox(Component *base)
 {
-    wmove(stdscr,base->row,base->col+1);
+    base->parent->cur_row = base->row;
+    base->parent->cur_col = base->col+1;
+    set_cursor_window(base->parent,true);
 }
 
 Component *create_checkbox(Window *win, int row, int col, int width, char *label, bool *value)
@@ -1560,21 +1637,29 @@ Component *create_checkbox(Window *win, int row, int col, int width, char *label
     checkbox->false_string = " ";
     base->format = "%s[%s]";
 
-    base->display = display_checkbox;
+    base->update = update_checkbox;
     base->input = input_checkbox;
     base->focus = focus_checkbox;
 
     // Set the focus to this new component
-    base->focus(base);
+    set_focus_window(win,base);
 
     return(base);
 }
 
-void display_string(Component *base)
+void update_string(Component *base)
 {
     String *str = (String *)base;
 
+    // Draw the label and field
     print_window(base->parent,base->row,base->col,base->format,base->label,base->width,str->value);
+    // If this component has focus...
+    if(base->parent->focus == base)
+    {
+        // Update the position of the cursor
+        base->parent->cur_row = base->row;
+        base->parent->cur_col = base->col+strlen(base->label)+str->cursor_offset;
+    }
 }
 
 int input_string(Component *base, int ch)
@@ -1583,14 +1668,54 @@ int input_string(Component *base, int ch)
 
     switch(ch)
     {
+        case KEY_HOME:
+            str->cursor_offset = 0;
+            break;
+        case KEY_END:
+            str->cursor_offset = strlen(str->value);
+            break;
+        case KEY_LEFT:
+            if(str->cursor_offset > 0)
+                --str->cursor_offset;
+            break;
+        case KEY_RIGHT:
+            if(str->cursor_offset < strlen(str->value))
+                ++str->cursor_offset;
+            break;
+        case KEY_BACKSPACE:
+        if (str->cursor_offset > 0)
+        {
+            memmove(&str->value[str->cursor_offset - 1], &str->value[str->cursor_offset], strlen(&str->value[str->cursor_offset]) + 1);
+            --str->cursor_offset;
+        }
+        break;
+        case KEY_DC:
+            if(str->cursor_offset < strlen(str->value))
+                memmove(&str->value[str->cursor_offset],&str->value[str->cursor_offset+1], strlen(&str->value[str->cursor_offset]));
+            break;
         case '\n':
         case '\r':
-            // Pass base-parent as the first parameter
-            get_string_input(base->row, base->col, "Enter Value: ", str->value, MAX_TEXT_FIELD_LENGTH);
+        case KEY_ENTER:
+        case KEY_ESC:
+            if(base->notify_action)
+                base->notify_action(base, ch);
+            base->parent->next_focus(base->parent);
             break;
         default:
-            // Did not consume the input
-            return(0);
+            if(isprint(ch))
+            {
+                if(str->cursor_offset < str->size_max)
+                {
+                    if(base->parent->insert_key)
+                        strcpy(&str->value[str->cursor_offset+1],&str->value[str->cursor_offset]);
+                    str->value[str->cursor_offset++] = ch;
+                }
+            }
+            else
+            {
+                // Did not consume the input
+                return(0);
+            }
     }
     // Consumed the input
     set_stale_window(base->parent);
@@ -1599,7 +1724,11 @@ int input_string(Component *base, int ch)
 
 void focus_string(Component *base)
 {
-    wmove(stdscr,base->row,base->col+strlen(base->label));
+    String *str = (String *)base;
+    base->parent->cur_row = base->row;
+    base->parent->cur_col = base->col+strlen(base->label)+str->cursor_offset;
+    str->cursor_offset = strlen(str->value);
+    set_cursor_window(base->parent,true);
 }
 
 Component *create_string(Window *win, int row, int col, int width, char *label, char *value, int size_max)
@@ -1620,40 +1749,70 @@ Component *create_string(Window *win, int row, int col, int width, char *label, 
 
     string->value = value;
     string->size_max = size_max;
+    string->cursor_offset = strlen(value);
     base->format = "%s%.*s";
 
-    base->display = display_string;
+    base->update = update_string;
     base->input = input_string;
     base->focus = focus_string;
 
     // Set the focus to this new component
-    base->focus(base);
+    set_focus_window(win,base);
+    //base->focus(base);
 
     return(base);
 }
 
-void display_integer(Component *base)
+void update_integer(Component *base)
 {
     Integer *integer = (Integer *)base;
 
     print_window(base->parent,base->row,base->col,base->format,base->label,*(integer->value));
+    // If this component has focus...
+    if(base->parent->focus == base)
+    {
+        // Update the cursor position
+        base->parent->cur_row = base->row;
+        base->parent->cur_col = base->col + strlen(base->label) + integer->cursor_offset;
+    }
 }
 
 int input_integer(Component *base, int ch)
 {
     Integer *integer = (Integer *)base;
 
-    switch(ch)
+    switch (ch)
     {
+        case KEY_BACKSPACE:
+        case KEY_DC:
+            if (integer->cursor_offset > 0)
+            {
+                integer->field[--integer->cursor_offset] = '\0';
+                *integer->value = atoi(integer->field);
+            }
+            break;
+        case '0' ... '9':
+            if (integer->cursor_offset < sizeof(integer->field) - 1)
+            {
+                integer->field[integer->cursor_offset++] = ch;
+                integer->field[integer->cursor_offset] = '\0';
+                *integer->value = atoi(integer->field);
+                integer->cursor_offset = snprintf(integer->field,sizeof(integer->field)-1,"%d",*integer->value);
+            }
+            break;
         case '\n':
         case '\r':
-            // Pass base-parent as the first parameter
-            *integer->value = get_int_input(base->row, base->col, "Enter Value: ");
+        case KEY_ENTER:
+            if(base->notify_action)
+                base->notify_action(base, *integer->value);
+            
+            base->parent->next_focus(base->parent);
             break;
         default:
             // Did not consume the input
-            return(0);
+            return (0);
     }
+
     // Consumed the input
     set_stale_window(base->parent);
     return(1);
@@ -1661,7 +1820,15 @@ int input_integer(Component *base, int ch)
 
 void focus_integer(Component *base)
 {
-    wmove(stdscr,base->row,base->col+strlen(base->label));
+    Integer *integer = (Integer *)base;
+    // Update the cursor position
+    base->parent->cur_row = base->row;
+    base->parent->cur_col = base->col + strlen(base->label) + integer->cursor_offset;
+    // Update the string representation and cursor location
+    sprintf(integer->field,"%d",*integer->value);
+    integer->cursor_offset = strlen(integer->field);
+    // Enable the cursor
+    set_cursor_window(base->parent,true);
 }
 
 Component *create_integer(Window *win, int row, int col, int width, char *label, int *value)
@@ -1681,19 +1848,20 @@ Component *create_integer(Window *win, int row, int col, int width, char *label,
         return(NULL);
 
     integer->value = value;
+    integer->cursor_offset = snprintf(integer->field,sizeof(integer->field)-1,"%d",*integer->value);
     base->format = "%s%d";
 
-    base->display = display_integer;
+    base->update = update_integer;
     base->input = input_integer;
     base->focus = focus_integer;
 
     // Set the focus to this new component
-    base->focus(base);
+    set_focus_window(win,base);
 
     return(base);
 }
 
-void display_text(Component *base)
+void update_text(Component *base)
 {
     if(base == NULL)
         return;
@@ -1713,10 +1881,10 @@ Component *create_text(Window *win, int row, int col, const char *text)
         return(NULL);
 
     // Create the component
-    if((create_component(base, win, row, col, 1, strlen(text), (char *)text)) == NULL)
+    if((create_component(base, win, row, col, 1, strlen(text), text)) == NULL)
         return(NULL);
 
-    base->display = display_text;
+    base->update = update_text;
     return(base);
 }
 
@@ -1732,8 +1900,8 @@ void tick_timer_method(Component *base)
     Timer *timer = (Timer *)base;
 
     if(--timer->counter == 0)
-        if(base->notification_action)
-            base->notification_action(base, 0); 
+        if(base->notify_action)
+            base->notify_action(base, 0); 
 }
 
 Component *create_timer(Window *win, unsigned int msecs)
@@ -1749,55 +1917,31 @@ Component *create_timer(Window *win, unsigned int msecs)
     if((create_component(base, win, 0, 0, 0, 0, NULL)) == NULL)
         return(NULL);
 
-    base->notification_tick = tick_timer_method;
+    base->notify_tick = tick_timer_method;
     timer->set_timer = set_timer_method;
     set_timer((Timer*)base,msecs);
 
     return(base);
 }
 
-void display_error_popup(const char *error_message, int milliseconds) 
-{
-    int width = strlen(error_message) + 9; // Add padding for the border
-    int height = 3;
-    int start_y = (LINES - height) / 2;
-    int start_x = (COLS - width) / 2;
-
-    WINDOW *error_win = newwin(height, width, start_y, start_x);
-    box(error_win, 0, 0);
-    mvwprintw(error_win, 1, 1, "Error: %s", error_message);
-    wrefresh(error_win);
-
-    PANEL *error_panel = new_panel(error_win); // Create a panel for the window
-    update_panels();
-    doupdate();
-    curs_set(0); // Hide the cursor
-
-    napms(milliseconds);  // Pause for 1 second
-
-    // --- Remove the error popup ---
-    del_panel(error_panel);
-    delwin(error_win);
-    curs_set(1); // Show the cursor
-    update_panels();
-    doupdate();
-}
-
-void popup_tick(Window *win)
-{
-    static int counter = 3000;
-
-    if(--counter == 0)
-    {
-        counter = 3000;
-        destroy_window(win);
-    }
-}
-
 int popup_action_handler(Component *base, int ch)
 {
     destroy_window(base->parent);
     return(0);
+}
+
+void display_error_popup(Window *screen, const char *error_message, int milliseconds) 
+{
+    int width = strlen(error_message) + 2; // Add padding for the border
+    int height = 3;
+    int start_y = (screen->height - height) / 2;
+    int start_x = (screen->width - width) / 2;
+
+    Window *win = create_window(screen, start_y, start_x, height, width, "Error", false);
+    win->frame_type = FRAME_LIGHT_ARC;
+    create_text(win,1,1,error_message);
+    Component *base = create_timer(win,milliseconds);
+    base->notify_action = popup_action_handler;    
 }
 
 void display_message_popup(Window *screen, const char *message, int milliseconds) 
@@ -1811,7 +1955,7 @@ void display_message_popup(Window *screen, const char *message, int milliseconds
     win->frame_type = FRAME_LIGHT_ARC;
     create_text(win,1,1,message);
     Component *base = create_timer(win,milliseconds);
-    base->notification_action = popup_action_handler;    
+    base->notify_action = popup_action_handler;    
 }
 
 // Generic Input Fields--------------------------------------------------------
@@ -1866,7 +2010,7 @@ void save_character(Window *screen)
         if (file == NULL)
         {
             // Error handling: Could not open file
-            display_error_popup("Could not open file!", MESSAGE_DURATION);
+            display_error_popup(screen, "Could not open file!", MESSAGE_DURATION);
         }
 
         fwrite(&character, sizeof(Character), 1, file); // Write the entire character struct
@@ -1876,45 +2020,56 @@ void save_character(Window *screen)
         display_message_popup(screen,"Character saved!", MESSAGE_DURATION);
     }
     else
-        display_error_popup("Please enter a name before saving",MESSAGE_DURATION);
+        display_error_popup(screen,"Please enter a name before saving",MESSAGE_DURATION);
+}
+
+int load_character_action(Component *base, int ch)
+{
+    if(ch == KEY_ESC)
+    {
+        destroy_window(base->parent);
+        return(0);
+    }
+    else
+    {
+        String *str = (String *)base;
+        char *input_name = str->value;
+        char filename[MAX_TEXT_FIELD_LENGTH + 12];
+
+        snprintf(filename, sizeof(filename), "%s.charsheet", input_name);
+
+        FILE *file = fopen(filename, "rb");
+        // Error handling
+        if (file == NULL) 
+            display_error_popup(base->parent->screen,"Character not found!", MESSAGE_DURATION);
+        else 
+        {
+            fread(&character, sizeof(Character), 1, file);
+            fclose(file);
+            display_message_popup(base->parent->screen,"Character loaded!", MESSAGE_DURATION);
+            destroy_window(base->parent);
+        }
+    }
+    return(0);
 }
 
 void load_character(Window *screen) 
 {
-    char filename[MAX_TEXT_FIELD_LENGTH + 12];
-    char input_name[MAX_TEXT_FIELD_LENGTH];
+    // Must be static because a pointer to it is passed to the string component
+    static char input_name[MAX_TEXT_FIELD_LENGTH+1];
+    memset(input_name, 0, MAX_TEXT_FIELD_LENGTH);
 
     // --- Create popup window ---
-    WINDOW *popup_win = newwin(3, 60, (LINES - 5) / 2, (COLS - 60) / 2);
-    box(popup_win, 0, 0);
-    keypad(popup_win, TRUE);
-    PANEL *popup_panel = new_panel(popup_win);
-    update_panels();
-    doupdate();
+    char *label = "Filename: ";
+    int width = strlen(label) + MAX_TEXT_FIELD_LENGTH + 2; // Add padding for the border
+    int height = 3;
+    int start_y = (screen->height - height) / 2;
+    int start_x = (screen->width - width) / 2;
 
-    mvwprintw(popup_win, 1, 2, "Enter character name to load: ");
-    echo(); // Enable input echoing
-    wgetnstr(popup_win, input_name, sizeof(input_name) - 1);
-    noecho();
-
-    snprintf(filename, sizeof(filename), "%s.charsheet", input_name);
-
-    FILE *file = fopen(filename, "rb");
-    // Error handling
-    if (file == NULL) 
-        display_error_popup("Character not found!", MESSAGE_DURATION);
-    else 
-    {
-        fread(&character, sizeof(Character), 1, file);
-        fclose(file);
-        display_message_popup(screen,"Character loaded!", MESSAGE_DURATION);
-    }
-
-    // --- Remove popup ---
-    del_panel(popup_panel);
-    delwin(popup_win);
-    update_panels();
-    doupdate();
+    Window *win = create_window(screen, start_y, start_x, height, width, "Enter string", false);
+    win->frame_type = FRAME_LIGHT_ARC;
+    Component *base = create_string(win,1,1,20,label,input_name,MAX_TEXT_FIELD_LENGTH);
+    base->notify_action = load_character_action;    
 }
 
 // Function to remove leading/trailing whitespace from a string
