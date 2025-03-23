@@ -29,9 +29,9 @@ UDEVDIR = /etc/udev/rules.d
 # C compiler command
 CC =		gcc
 # Build flags for c files
-CFLAGS = -g -I/usr/local/include -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wredundant-decls -Wno-long-long -DNCURSES_WIDECHAR=1 -MMD -MP
+CFLAGS = -g -I/usr/local/include -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wredundant-decls -Wno-long-long -Wno-parentheses -DNCURSES_WIDECHAR=1 -MMD -MP
 # Debug flags for c files
-DFLAGS = -g -I/usr/local/include -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wredundant-decls -Wno-long-long -DNCURSES_WIDECHAR=1 -MMD -MP
+DFLAGS = -g -I/usr/local/include -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wredundant-decls -Wno-long-long -Wno-parentheses -DNCURSES_WIDECHAR=1 -MMD -MP
 # Linker Flags
 LDFLAGS = -lncursesw
 # Application command line options
