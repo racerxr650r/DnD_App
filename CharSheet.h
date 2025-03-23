@@ -4,12 +4,24 @@
 
 #include <locale.h> // For setlocale
 #include <ncurses.h>
-#include <panel.h> // For panels
 #include <wchar.h>
 #include <unistd.h>
 
 // Constants ******************************************************************
 // If you change these, prior character files will be incompatible
+#define MAX_TOOLS                   10
+#define MAX_TOOL_DESCRIPTION        40
+#define MAX_ARMOR                   10
+#define MAX_ARMOR_DESCRIPTION       40
+#define MAX_WEAPONS                 15
+#define MAX_WEAPON_DESCRIPTION      40
+#define MAX_EQUIPMENT               30
+#define MAX_EQUIPMENT_DESCRIPTION   40
+#define MAX_TREASURE                40
+#define MAX_TREASURE_DESCRIPTION    40
+#define MAX_LANUAGES                10
+#define MAX_LANGUAGE_DESCRIPTION    40
+
 #define MAX_TEXT_FIELD_LENGTH 41
 #define MAX_SKILLS 18  // Number of skills
 
@@ -298,11 +310,20 @@ typedef struct list_t
     Component   base;   
     char        *items;
     int         size;
-    int         size_max;
+    int         max_items;
+    int         max_length;
     int         selected;
     int         top_visible;
 }List;
-Component *create_list(Window *win, int row, int col, int height, int width, char *label, char *items, int size_max);
+Component *create_list(Window *win, int row, int col, int height, int width, char *label, char *items, int max_items, int max_length);
+
+static inline char *selected_item_list(List *list)
+{
+    if(list == NULL)
+        return(NULL);
+    
+    return(&list->items[list->selected*list->max_length]);
+}
 
 struct checkbox_t;
 typedef void (*Display_Checkbox)(struct checkbox_t *checkbox);
@@ -365,7 +386,7 @@ static inline void set_timer(Timer *timer, unsigned int msecs)
 }
 
 
-Window *create_screen();
+Window *create_screen(void);
 int run_screen(Window *screen);
 int input_screen(Window **this);
 
@@ -396,6 +417,8 @@ static inline void write_screen(Window *src)
         if(src->write != NULL)
             src->write(NULL,src);
 }
+
+Component *get_string_popup(Window *screen, char * label, char *value, int length, Input_Component handler);
 
 // D&D Character Data Types ***************************************************
 // Abilities -----
@@ -459,15 +482,16 @@ typedef struct
 // Inventory -----
 typedef struct
 {
-    char    armor[20][MAX_TEXT_FIELD_LENGTH];
-    char    weapons[20][MAX_TEXT_FIELD_LENGTH];
-    char    equipment[100][MAX_TEXT_FIELD_LENGTH];
+    char    tools[MAX_TOOLS][MAX_TOOL_DESCRIPTION];
+    char    armor[MAX_ARMOR][MAX_ARMOR_DESCRIPTION];
+    char    weapons[MAX_WEAPONS][MAX_WEAPON_DESCRIPTION];
+    char    equipment[MAX_EQUIPMENT][MAX_EQUIPMENT_DESCRIPTION];
     int     copper;
     int     silver;
     int     electrum;
     int     gold;
     int     platinum;
-    char    treasure_items[200][MAX_TEXT_FIELD_LENGTH];
+    char    treasure_items[MAX_TREASURE][MAX_TREASURE_DESCRIPTION];
 }Inventory;
 
 // Spells -----
@@ -558,17 +582,13 @@ typedef struct
     int         passive_investigation;
     Abilities   abilities;
 
-    // Proficiencies
-    Skills      skills;
-    char        tools[20][MAX_TEXT_FIELD_LENGTH];
-    char        armor[20][MAX_TEXT_FIELD_LENGTH];
-    char        weapons[20][MAX_TEXT_FIELD_LENGTH];
-
-    // Combat
-    int         hp_max;
     int         hp_current;
+    int         hp_max;
     int         hp_temp;
     int         hit_dice;
+
+    // Proficiencies
+    Skills      skills;
     int         exhaustion;
     int         death_saves;
     bool        inspiration;

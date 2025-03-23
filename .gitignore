@@ -53,3 +53,4 @@ dkms.conf
 
 # Application files
 *.character
+build/DnD

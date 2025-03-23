@@ -320,7 +320,7 @@ Window *create_character_window(Window *screen)
     read_only_component(this);
 
     ++row; // Add some spacing
-    create_list(win,row,right_column_start,3,20,"Languages ---",(char *)character.languages,LIST_MAX_SIZE);
+    create_list(win,row,right_column_start,3,20,"Languages ---",(char *)character.languages,MAX_LANUAGES,MAX_LANGUAGE_DESCRIPTION);
 
     set_focus_window(win, name);
 
@@ -430,9 +430,9 @@ Window *create_proficiencies_window(Window *screen)
     // Calculate the right column
     int right_column_start = (win->width / 2) + 2; // Add spacing between columns
 
-    create_list(win,1,right_column_start,5,40, "Tools---", (char *)character.tools, LIST_MAX_SIZE);
-    create_list(win,7,right_column_start,5,40, "Armor---", (char *)character.armor, LIST_MAX_SIZE);
-    create_list(win,13,right_column_start,5,40, "Weapons--", (char *)character.weapons, LIST_MAX_SIZE);
+    create_list(win,1,right_column_start,5,40, "Tools---", (char *)character.inventory.tools, MAX_TOOLS, MAX_TOOL_DESCRIPTION);
+    create_list(win,7,right_column_start,5,40, "Armor---", (char *)character.inventory.armor, MAX_ARMOR, MAX_ARMOR_DESCRIPTION);
+    create_list(win,13,right_column_start,5,40, "Weapons--", (char *)character.inventory.weapons, MAX_WEAPONS, MAX_WEAPON_DESCRIPTION);
 
     // Set the focus for the window
     set_focus_window(win, focus);
@@ -1008,11 +1008,20 @@ void destroy_window(Window *this)
     if(this->notify_destroy)
         this->notify_destroy(this);
     
+    // Destroy all of the components
+    Component *component = this->component_head;
+    while(component)
+    {
+        component->destroy(component);
+        component = component->next;
+    }
+
     // Mark all the windows as stale
     set_stale_window(this->screen->bottom_window);
 
     // Remove the window from the list
     this->remove(this);
+
     // Free the window buffer
     free(this->buffer);
     // Free the window data structure
@@ -1389,7 +1398,12 @@ void remove_component(Window *win, Component *component)
     if(win->component_head == component)
     {
         win->component_head = component->next;
-        win->component_head->prev = NULL;
+        // If there is more than one component...
+        if(win->component_head != NULL)
+            win->component_head->prev = NULL;
+        // Else this is the only component in the list...
+        else
+            win->component_tail = NULL;
     }
     // Else if the component is at the tail of the list...
     else if(win->component_tail == component)
@@ -1474,6 +1488,8 @@ Component *create_component(Component *component, Window *win, int row, int col,
     return(component);
 }
 
+#define list_item_selected(list)    &list->items[list->selected*list->max_length]
+
 void update_list(Component *base)
 {
     List *list = (List *)base;
@@ -1490,18 +1506,44 @@ void update_list(Component *base)
     // Display the label
     int row = base->row;
     int col = base->col;
-
     print_window(base->parent,row++,col,"%s---",base->label);
-
 
     // Display the rows of items visible
     for(int i = list->top_visible; i < list->size && i < list->top_visible+base->height; i++)
-        print_window(base->parent,row++,col,"%.*s", base->width, &list->items[i*list->size_max]);
+        print_window(base->parent,row++,col,"%.*s", base->width, &list->items[i*list->max_length]);
+
+    // If this component has focus...
+    if(base->parent->focus == base)
+    {
+        // Update the position of the cursor
+        base->parent->cur_row = base->row + list->selected - list->top_visible + 1;
+        base->parent->cur_col = base->col+strlen(selected_item_list(list));
+    }
+}
+
+int list_action(Component *base, int ch)
+{
+    List *list = (List *)base->prev;
+
+    // If the next selected item is at the end of the list and the list is not too big...
+    if(++list->selected == list->size && list->size < list->max_items)
+        // Add a blank item to the end of the list
+        list->items[list->size++ * list->max_length] = '\0';
+        //strncpy(&list->items[list->size++ * list->max_length],"",list->max_length-1);
+    // Else if the size of the list is maxxed...
+    else if(list->size == list->max_items)
+    {
+        --list->selected;
+        display_error_popup(base->parent->screen, "Max List Items Reached",MESSAGE_DURATION);
+    }
+    destroy_window(base->parent);
+    return(1);
 }
 
 int input_list(Component *base, int ch)
 {
     List *list = (List *)base;
+    Component *get_string;
 
     switch(ch)
     {
@@ -1515,15 +1557,21 @@ int input_list(Component *base, int ch)
             break;
         case '\n':
         case '\r':
+            get_string = get_string_popup(base->parent->screen, "Enter Item: ", &list->items[list->selected*list->max_length], list->max_length, list_action);
+            if(get_string == NULL)
+                return(-1);
+
+            // Stash a pointer to this component context for the action handler
+            get_string->prev = base;
             // Pass base-parent as the first parameter
-            get_string_input(base->row+list->selected-list->top_visible+1, base->col, "Enter Item:", &list->items[list->selected*list->size_max], MAX_TEXT_FIELD_LENGTH);
+            /*get_string_input(base->row+list->selected-list->top_visible+1, base->col, "Enter Item:", &list->items[list->selected*list->size_max], MAX_TEXT_FIELD_LENGTH);
             if(++list->selected == list->size && list->size < LIST_MAX_SIZE)
                 strncpy(&list->items[list->size++ * list->size_max],"",MAX_TEXT_FIELD_LENGTH-1);
             else if(list->size == LIST_MAX_SIZE)
             {
                 --list->selected;
                 display_error_popup(base->parent->screen, "Max List Items Reached",MESSAGE_DURATION);
-            }
+            }*/
             break;
         default:
             // Did not consume the input
@@ -1545,10 +1593,10 @@ void focus_list(Component *base)
     set_cursor_window(base->parent,true);
 }
 
-Component *create_list(Window *win, int row, int col, int height, int width, char *label, char *items, int size_max)
+Component *create_list(Window *win, int row, int col, int height, int width, char *label, char *items, int max_items, int max_length)
 {
     // Check input parameters
-    if(win == NULL || items == NULL || size_max <= 0)
+    if(win == NULL || items == NULL || max_items <= 0 || max_length <= 0)
         return(NULL);
 
     // Allocate the list
@@ -1562,14 +1610,15 @@ Component *create_list(Window *win, int row, int col, int height, int width, cha
     Component *base = (Component *)list;
     
     // Set list configuration
-    list->size_max = size_max;
+    list->max_items = max_items;
+    list->max_length = max_length;
     list->items = items;
     list->selected = 0;
     list->top_visible = 0;
 
     // Determine how many items are in the list
     int i = 0;
-    while(list->items[i++ * list->size_max] != 0);
+    while(list->items[i++ * list->max_length] != 0);
     list->size = i;
 
     base->update = update_list;
@@ -1697,9 +1746,8 @@ int input_string(Component *base, int ch)
         case '\r':
         case KEY_ENTER:
         case KEY_ESC:
-            if(base->notify_action)
+            if(base->notify_action != NULL)
                 base->notify_action(base, ch);
-            base->parent->next_focus(base->parent);
             break;
         default:
             if(isprint(ch))
@@ -1924,12 +1972,12 @@ Component *create_timer(Window *win, unsigned int msecs)
     return(base);
 }
 
-int popup_action_handler(Component *base, int ch)
+// Generic pop up windows------------------------------------------------------
+int display_popup_action(Component *base, int ch)
 {
     destroy_window(base->parent);
     return(0);
 }
-
 void display_error_popup(Window *screen, const char *error_message, int milliseconds) 
 {
     int width = strlen(error_message) + 2; // Add padding for the border
@@ -1941,7 +1989,7 @@ void display_error_popup(Window *screen, const char *error_message, int millisec
     win->frame_type = FRAME_LIGHT_ARC;
     create_text(win,1,1,error_message);
     Component *base = create_timer(win,milliseconds);
-    base->notify_action = popup_action_handler;    
+    base->notify_action = display_popup_action;    
 }
 
 void display_message_popup(Window *screen, const char *message, int milliseconds) 
@@ -1955,47 +2003,28 @@ void display_message_popup(Window *screen, const char *message, int milliseconds
     win->frame_type = FRAME_LIGHT_ARC;
     create_text(win,1,1,message);
     Component *base = create_timer(win,milliseconds);
-    base->notify_action = popup_action_handler;    
+    base->notify_action = display_popup_action;    
 }
 
-// Generic Input Fields--------------------------------------------------------
-int get_int_input(int y, int x, const char *prompt) 
+Component *get_string_popup(Window *screen, char * label, char *value, int length, Input_Component handler)
 {
-    WINDOW *win = stdscr;
-    char buffer[20];  // Buffer to store the input string
-    int value = 0;
+    // --- Create popup window ---
+    int width = strlen(label) + length + 2; // Add padding for the border
+    int height = 3;
+    int start_y = (screen->height - height) / 2;
+    int start_x = (screen->width - width) / 2;
 
-    echo(); // Enable echoing of input (for numbers, it's helpful)
-    mvwprintw(win, y, x, "%s ", prompt); // Display the prompt
-    wgetnstr(win, buffer, sizeof(buffer) -1);  // Get input string (safe version)
-    noecho(); // Disable echoing
+    Window *win = create_window(screen, start_y, start_x, height, width, NULL, false);
+    if(win == NULL)
+        return(NULL);
+    win->frame_type = FRAME_LIGHT_ARC;
 
-    // Convert the string to an integer.  Error handling is crucial here!
-    if (sscanf(buffer, "%d", &value) != 1) 
-    {
-        // Handle input error (e.g., non-numeric input)
-        mvwprintw(win, LINES - 1, 0, "Invalid input. Please enter a number. Press any key...");
-        wgetch(win); // Wait for a keypress
-        mvwprintw(win, LINES - 1, 0, "%*s", COLS, ""); // Clear the error message line.
-        wrefresh(win);
-        return 0; // Or some other error value, like -1.  0 is often a valid score, though.
-    }
-    return value;
-}
+    Component *base = create_string(win,1,1,20,label,value,length);
+    if(base == NULL)
+        return(NULL);
+    base->notify_action = handler;
 
-void get_string_input(int y, int x, const char *prompt, char *buffer, int max_length)
-{
-    WINDOW *win = stdscr;
-    char temp_buffer[256]; // Use a temporary buffer, in case max_length is small
-
-    echo();
-    mvwprintw(win, y, x, "%s ", prompt);
-    wgetnstr(win, temp_buffer, sizeof(temp_buffer) -1 ); // Get input, prevent buffer overflow
-    noecho();
-
-    // Copy the input to the provided buffer, truncating if necessary.
-    strncpy(buffer, temp_buffer, max_length - 1);
-    buffer[max_length - 1] = '\0'; // Ensure null termination!  Crucial.
+    return(base);
 }
 
 // File I/O Functions ---------------------------------------------------------
@@ -2025,23 +2054,19 @@ void save_character(Window *screen)
 
 int load_character_action(Component *base, int ch)
 {
-    if(ch == KEY_ESC)
-    {
-        destroy_window(base->parent);
-        return(0);
-    }
-    else
+    if(ch != KEY_ESC)
     {
         String *str = (String *)base;
         char *input_name = str->value;
-        char filename[MAX_TEXT_FIELD_LENGTH + 12];
+        char *filename;
 
-        snprintf(filename, sizeof(filename), "%s.charsheet", input_name);
-
+        asprintf(&filename, "%s.charsheet", input_name);
         FILE *file = fopen(filename, "rb");
+        free(filename);
+        
         // Error handling
         if (file == NULL) 
-            display_error_popup(base->parent->screen,"Character not found!", MESSAGE_DURATION);
+             display_error_popup(base->parent->screen,"Character not found!", MESSAGE_DURATION);
         else 
         {
             fread(&character, sizeof(Character), 1, file);
@@ -2050,26 +2075,15 @@ int load_character_action(Component *base, int ch)
             destroy_window(base->parent);
         }
     }
-    return(0);
+    return(ch);
 }
 
 void load_character(Window *screen) 
 {
-    // Must be static because a pointer to it is passed to the string component
-    static char input_name[MAX_TEXT_FIELD_LENGTH+1];
-    memset(input_name, 0, MAX_TEXT_FIELD_LENGTH);
-
-    // --- Create popup window ---
-    char *label = "Filename: ";
-    int width = strlen(label) + MAX_TEXT_FIELD_LENGTH + 2; // Add padding for the border
-    int height = 3;
-    int start_y = (screen->height - height) / 2;
-    int start_x = (screen->width - width) / 2;
-
-    Window *win = create_window(screen, start_y, start_x, height, width, "Enter string", false);
-    win->frame_type = FRAME_LIGHT_ARC;
-    Component *base = create_string(win,1,1,20,label,input_name,MAX_TEXT_FIELD_LENGTH);
-    base->notify_action = load_character_action;    
+    static char filename[MAX_TEXT_FIELD_LENGTH];
+    strcpy(filename,"");
+    
+    get_string_popup(screen, "Filename: ", filename, 20, load_character_action);    
 }
 
 // Function to remove leading/trailing whitespace from a string
