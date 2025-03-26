@@ -213,7 +213,7 @@ int input_ability(Component *component, int ch)
 
 Window *create_character_window(Window *screen)
 {
-    Window *win = create_window(screen,0,0,LINES,COLS,"Character",true);
+    Window *win = create_window(screen,0,0,screen->height,screen->width,"Character",true);
     win->frame_type = FRAME_HYBRID;
 
     // Display character information in sections
@@ -350,7 +350,7 @@ Window *create_character_window(Window *screen)
 
 Window *create_proficiencies_window(Window *screen)
 {
-    Window *win = create_window(screen,0,0,LINES,COLS,"Proficiencies",true);
+    Window *win = create_window(screen,0,0,screen->height,screen->width,"Proficiencies",true);
     win->frame_type = FRAME_HYBRID;
 
     Component *this;
@@ -463,9 +463,18 @@ Window *create_proficiencies_window(Window *screen)
 
 Window *create_combat_window(Window *screen)
 {
-    Window *win = create_window(screen,0,0,LINES,COLS,"Combat",true);
+    Window *win = create_window(screen,0,0,screen->height,screen->width,"Combat",true);
     win->frame_type = FRAME_HYBRID;
     return(win);
+
+    int row = 1;
+
+    Component *this = create_string(win,row++,1,20,"Weapon: ",character.attack[0].name,MAX_TEXT_FIELD_LENGTH);
+    create_checkbox(win,row,1,1,"Str: ",&character.attack[0].strength);
+    create_checkbox(win,row++,10,1,"Range: ",&character.attack[0].range);
+    create_checkbox(win,row,1,1,"Reach: ",&character.attack[0].reach);
+    create_checkbox(win,row++,12,1,"Prof: ",&character.attack[0].proficient);
+
 }
 
 Window *create_magic_window(Window *screen)

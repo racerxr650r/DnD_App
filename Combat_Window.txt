@@ -1,0 +1,45 @@
+012345678901234567890123456789012345678901234567890123456789012345678901234567890
+|                                                                               |
+| +-Crossbow, light--------+  +-Crossbow, light--------+    Inspiration:  [X]   |   
+| |Range Shrt 000" Lng 000"|  |Range Shrt 000" Lng 000"|                        |
+| |(0) Str      Magic: +00 |  |(0) Str      Magic: +00 |     Initiative:  +00   |
+| |(0) Dex     Attack: +00 |  |(0) Dex     Attack: +00 |                        |
+| |Prof: [x]   Damage: +00 |  |Prof: [x]   Damage: +00 |  +-Armor Class-------+ |
+| |Damage: 8d12 bludgeoning|  |Damage: 8d12 bludgeoning|  | Fully Armored:  00| |
+| +------------------------+  +------------------------+  |Without Shield:  00| |
+| +-Crossbow, light--------+  +-Crossbow, light--------+  | Without Armor:  00| |
+| |Range Shrt 000" Lng 000"|  |Range Shrt 000" Lng 000"|  +-------------------+ |
+| |(0) Str      Magic: +00 |  |(0) Str      Magic: +00 |  +-Hit Points--------+ |
+| |(0) Dex     Attack: +00 |  |(0) Dex     Attack: +00 |  |      Current:  000| |
+| |Prof: [x]   Damage: +00 |  |Prof: [x]   Damage: +00 |  |      Maximum:  000| |
+| |Damage: 8d12 bludgeoning|  |Damage: 8d12 bludgeoning|  |    Temporary:  000| |
+| +------------------------+  +------------------------+  +-------------------+ |
+| +-Crossbow, light--------+  +-Exhaustion-------------+  +-Special Ability---+ |
+| |Range Shrt 000" Lng 000"|  |(0) DA Ability Checks   |  |Sneak Attack: 00/00| |       
+| |(0) Str      Magic: +00 |  |(0) Speed Half          |  |       Rages: 00/00| |
+| |(0) Dex     Attack: +00 |  |(0) DA Attacks & Saves  |  |   Ki Points: 00/00| |
+| |Prof: [x]   Damage: +00 |  |(0) HP Max Half         |  |Martial Arts: 00/00| |
+| |Damage: 8d12 bludgeoning|  |(0) Speed Zero          |  |Action Surge: 00/00| |
+| +------------------------+  +------------------------+  +-------------------+ |
+012345678901234567890123456789012345678901234567890123456789012345678901234567890
+   <Ctrl M> HP Math  <Ctrl +> +1 HP  <Ctrl -> -1 HP  <Ctrl E> Edit/Combat Mode  
+
+
+----------- Help -----------
+<Pg Up>     Next Screen
+<Pg Dwn>    Previous Screen
+<TAB>       Next field
+<Shft TAB>  Previous Field
+<KP +>      Increment Field
+<KP ->      Decrement Field
+
+<Ctrl M>    HP Math
+<Ctrl +>    +1 HP
+<Ctrl ->    -1 HP
+<Ctrl I>    +/- Inspiration
+
+<Ctrl E>    Edit/Play Mode
+<Ctrl L>    Load Character
+<Ctrl S>    Save Character
+<Ctrl Q>    Quit Application
+<Ctrl H>    Display Help
