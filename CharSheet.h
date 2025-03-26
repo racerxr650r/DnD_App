@@ -95,6 +95,15 @@ typedef void (*Notify_Component)(struct component_t *component);
 // UI Window
 typedef enum
 {
+    APP_UNABLE_TO_CREATE_WINDOW,
+    APP_UNABLE_TO_CREATE_COMPONENT,
+    APP_MEMORY_ALLOC_FAIL,
+    APP_INVALID_PARAMETER,
+    APP_OK = 0
+}App_Status;
+
+typedef enum
+{
     FRAME_NONE = -1,
     FRAME_LIGHT = 0,
     FRAME_LIGHT_ARC = 1,
@@ -152,6 +161,9 @@ typedef struct window_t
     struct window_t *screen;
     struct window_t *prev;
     struct window_t *next;
+
+    void *context;
+    size_t context_size;
 
     Initialize_Window   initialize;
     Configure_Window    configure;
@@ -240,6 +252,14 @@ static inline int write_window(Window *src, Window *this)
 
     int result = this->write(src, this);
     return(result);
+}
+
+static inline void destroy_window(Window *this)
+{
+    if(this != NULL)
+        if(this->destroy != NULL)
+            this->destroy(this);
+    return;
 }
 
 // UI Component
@@ -418,6 +438,9 @@ static inline void write_screen(Window *src)
             src->write(NULL,src);
 }
 
+void display_error_popup(Window *win, const char *error_message, int milliseconds);
+void display_message_popup(Window *win,const char *message, int milliseconds);
+Window *yes_no_popup(Window *screen, const char *message, Input_Window yes_no_input);
 Component *get_string_popup(Window *screen, char * label, char *value, int length, Input_Component handler);
 
 // D&D Character Data Types ***************************************************

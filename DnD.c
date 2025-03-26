@@ -8,9 +8,6 @@
 #include "CharSheet.h"
 
 // Internal Function Prototypes ***********************************************
-void display_error_popup(Window *win, const char *error_message, int milliseconds);
-void display_message_popup(Window *win,const char *message, int milliseconds);
-
 int calculate_modifier(int score, int proficiency_modifier);
 void calculate_dependencies(Window *win);
 
@@ -88,8 +85,27 @@ int create_app_windows(Window *screen)
     return(-1);
 }
 
+int app_quit(Window *win, int ch)
+{
+    switch(ch)
+    {
+        case 'Y':
+        case 'y':
+            return(-1);
+        case 'N':
+        case 'n':
+        case KEY_ESC:
+            destroy_window(win);
+        case KEY_QUIT_PROGRAM:
+            return(1);
+    }
+    return(0);
+}
+
 int app_input(Window *screen, int input)
 {
+    Window *quit_win;
+
     // The following keys work in any window in the app
     switch(input)
     {
@@ -108,7 +124,11 @@ int app_input(Window *screen, int input)
             load_character(screen);
             break;
         case KEY_QUIT_PROGRAM:
-            return(-1);
+            quit_win = yes_no_popup(screen, "Are you sure you want to quit? (Y/N)", app_quit);
+            if(quit_win == NULL)
+                return(-1);
+            break;
+            //return(-1);
         default:
             // Key not consumed
             return(0);
@@ -185,6 +205,7 @@ int input_ability(Component *component, int ch)
             if(component->next->next)
                 if(component->next->next->next)
                     if(component->next->next->next->input)
+                        // Send the input tot he associated saving throw profenciency
                         result = component->next->next->next->input(component->next->next->next,ch);
 
     return(result);
@@ -192,7 +213,7 @@ int input_ability(Component *component, int ch)
 
 Window *create_character_window(Window *screen)
 {
-    Window *win = create_window(screen,0,0,LINES,COLS,"Character",true);
+    Window *win = create_window(screen,0,0,screen->height,screen->width,"Character",true);
     win->frame_type = FRAME_HYBRID;
 
     // Display character information in sections
@@ -329,7 +350,7 @@ Window *create_character_window(Window *screen)
 
 Window *create_proficiencies_window(Window *screen)
 {
-    Window *win = create_window(screen,0,0,LINES,COLS,"Proficiencies",true);
+    Window *win = create_window(screen,0,0,screen->height,screen->width,"Proficiencies",true);
     win->frame_type = FRAME_HYBRID;
 
     Component *this;
@@ -442,9 +463,18 @@ Window *create_proficiencies_window(Window *screen)
 
 Window *create_combat_window(Window *screen)
 {
-    Window *win = create_window(screen,0,0,LINES,COLS,"Combat",true);
+    Window *win = create_window(screen,0,0,screen->height,screen->width,"Combat",true);
     win->frame_type = FRAME_HYBRID;
     return(win);
+
+    int row = 1;
+
+    Component *this = create_string(win,row++,1,20,"Weapon: ",character.attack[0].name,MAX_TEXT_FIELD_LENGTH);
+    create_checkbox(win,row,1,1,"Str: ",&character.attack[0].strength);
+    create_checkbox(win,row++,10,1,"Range: ",&character.attack[0].range);
+    create_checkbox(win,row,1,1,"Reach: ",&character.attack[0].reach);
+    create_checkbox(win,row++,12,1,"Prof: ",&character.attack[0].proficient);
+
 }
 
 Window *create_magic_window(Window *screen)
@@ -999,7 +1029,7 @@ void stale_window_method(Window *this)
     }
 }
 
-void destroy_window(Window *this)
+void destroy_window_method(Window *this)
 {
     if(this == NULL)
         return;
@@ -1307,7 +1337,7 @@ Window *allocate_window(int row, int col, int height, int width, char *label, bo
     window->update = update_window;
     window->write = write_window_method;
     window->input = input_window;
-    window->destroy = destroy_window;
+    window->destroy = destroy_window_method;
 
     window->add = add_window;
     window->insert = insert_window;
@@ -2006,6 +2036,29 @@ void display_message_popup(Window *screen, const char *message, int milliseconds
     base->notify_action = display_popup_action;    
 }
 
+Window *yes_no_popup(Window *screen, const char *message, Input_Window yes_no_input)
+{
+    int width = strlen(message) + 2; // Add padding for the border
+    int height = 3;
+    int start_y = (screen->height - height) / 2;
+    int start_x = (screen->width - width) / 2;
+
+    Window *win;
+    Component *base;
+    if(win = create_window(screen, start_y, start_x, height, width, NULL, false))
+    {
+        win->frame_type = FRAME_LIGHT_ARC;
+        if(base = create_text(win,1,1,message))
+            win->input = yes_no_input;
+        else
+        {
+            destroy_window(win);
+            win = NULL;
+        }
+    }
+    return(win);
+}
+
 Component *get_string_popup(Window *screen, char * label, char *value, int length, Input_Component handler)
 {
     // --- Create popup window ---
@@ -2028,28 +2081,61 @@ Component *get_string_popup(Window *screen, char * label, char *value, int lengt
 }
 
 // File I/O Functions ---------------------------------------------------------
+void save_character_action(Window *screen)
+{
+    char filename[MAX_TEXT_FIELD_LENGTH + 12]; // +12 for ".charsheet" and null terminator
+    snprintf(filename, sizeof(filename), "%s.charsheet", character.name);
+
+    FILE *file = fopen(filename, "wb"); // "wb" for writing binary data
+    // If could not open file to write...
+    if (file == NULL)
+        display_error_popup(screen, "Could not open file!", MESSAGE_DURATION);
+    // Else opened file to write...
+    else
+    {
+        fwrite(&character, sizeof(Character), 1, file); // Write the entire character struct
+        fclose(file);
+        // Display success message (clear after a short delay)
+        display_message_popup(screen,"Character saved!", MESSAGE_DURATION);
+    }
+}
+
+int save_character_input(Window *win, int ch)
+{
+    // Assume the input was consumed.
+    int ret = 1;
+
+    // If positive acknowledge...
+    if(ch == 'Y' || ch == 'y')
+    {
+        save_character_action(win->screen);
+        destroy_window(win);
+    }
+    // Else if negative acknowledge...
+    else if(ch == 'N' || ch == 'n' || ch == KEY_ESC)
+        destroy_window(win);
+    // Else if the user didn't tey to save again...
+    else if(ch != KEY_SAVE_CHARACTER)
+        ret = 0;
+
+    return(ret);
+}
+    
 void save_character(Window *screen) 
 {
     if(strcmp(character.name, ""))
     {
         char filename[MAX_TEXT_FIELD_LENGTH + 12]; // +12 for ".charsheet" and null terminator
         snprintf(filename, sizeof(filename), "%s.charsheet", character.name);
-
-        FILE *file = fopen(filename, "wb"); // "wb" for writing binary data
-        if (file == NULL)
-        {
-            // Error handling: Could not open file
-            display_error_popup(screen, "Could not open file!", MESSAGE_DURATION);
-        }
-
-        fwrite(&character, sizeof(Character), 1, file); // Write the entire character struct
-        fclose(file);
-
-        // Display success message (clear after a short delay)
-        display_message_popup(screen,"Character saved!", MESSAGE_DURATION);
+        // If the file already exists...
+        if(access(filename, F_OK) == 0)
+            yes_no_popup(screen,"Character Exists, Overwrite? (Y/N)",save_character_input);
+        // If the file doesn't exist...
+        else
+            save_character_action(screen);
     }
     else
-        display_error_popup(screen,"Please enter a name before saving",MESSAGE_DURATION);
+        display_error_popup(screen,"Please enter a character name before saving",MESSAGE_DURATION);
 }
 
 int load_character_action(Component *base, int ch)
