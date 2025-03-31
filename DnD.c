@@ -1,11 +1,12 @@
 // Compile: gcc -o DnD CharSheet.c -DNCURSES_WIDECHAR=1 -lncursesw -lpanel
 #define __STDC_WANT_LIB_EXT2__ 1  //Define you want TR 24731-2:2010 extensions
 
+#include "CharSheet.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h> // For isdigit
-#include "CharSheet.h"
+#include <wctype.h>
 
 // Internal Function Prototypes ***********************************************
 int calculate_modifier(int score, int proficiency_modifier);
@@ -76,11 +77,11 @@ int create_app_windows(Window *screen)
 {
     // Create the windows in the opposite of the Z ordering
     if(create_notes_window(screen) != NULL)
-        if(create_inventory_window(screen) != NULL)
-            if(create_magic_window(screen) != NULL)
-                if(create_combat_window(screen) != NULL)
-                    if(create_proficiencies_window(screen) != NULL)
-                        if(create_character_window(screen) != NULL)
+        //if(create_inventory_window(screen) != NULL)
+            //if(create_magic_window(screen) != NULL)
+                //if(create_combat_window(screen) != NULL)
+                    //if(create_proficiencies_window(screen) != NULL)
+                        //if(create_character_window(screen) != NULL)
                             return(0);
     return(-1);
 }
@@ -469,7 +470,7 @@ Window *create_combat_window(Window *screen)
 
     int row = 1;
 
-    Component *this = create_string(win,row++,1,20,"Weapon: ",character.attack[0].name,MAX_TEXT_FIELD_LENGTH);
+    create_string(win,row++,1,20,"Weapon: ",character.attack[0].name,MAX_TEXT_FIELD_LENGTH);
     create_checkbox(win,row,1,1,"Str: ",&character.attack[0].strength);
     create_checkbox(win,row++,10,1,"Range: ",&character.attack[0].range);
     create_checkbox(win,row,1,1,"Reach: ",&character.attack[0].reach);
@@ -479,22 +480,25 @@ Window *create_combat_window(Window *screen)
 
 Window *create_magic_window(Window *screen)
 {
-    Window *win = create_window(screen,0,0,LINES,COLS,"Magic",true);
+    Window *win = create_window(screen,0,0,screen->height,screen->width,"Magic",true);
     win->frame_type = FRAME_HYBRID;
     return(win);
 }
 
 Window *create_inventory_window(Window *screen)
 {
-    Window *win = create_window(screen,0,0,LINES,COLS,"Inventory",true);
+    Window *win = create_window(screen,0,0,screen->height,screen->width,"Inventory",true);
     win->frame_type = FRAME_HYBRID;
     return(win);
 }
 
 Window *create_notes_window(Window *screen)
 {
-    Window *win = create_window(screen,0,0,LINES,COLS,"Notes",true);
+    Window *win = create_window(screen,0,0,screen->height,screen->width,"Notes",true);
     win->frame_type = FRAME_HYBRID;
+
+    create_text_editor(win, 1, 1, win->height-2, win->width-2, character.notes, MAX_NOTES_LENGTH);
+
     return(win);
 }
 
@@ -518,9 +522,11 @@ void destroy_screen_method(Window *this)
 
     // Destroy all the child windows of this screen
     while(this->top_window)
-        this->top_window->destroy(this->top_window);
+        destroy_window(this->top_window);
+        //this->top_window->destroy(this->top_window);
 
     // Free the screen data structure
+    free(this->buffer);
     free(this);
 }
 
@@ -776,8 +782,7 @@ void update_window(Window *this)
         return;
 
     // Clear the window
-    for(int i=0;i<(this->height*this->width);i++)
-        this->buffer[i] = L' ';
+    clear_window(this);
 
     frame_window(this);
 
@@ -1042,12 +1047,14 @@ void destroy_window_method(Window *this)
     Component *component = this->component_head;
     while(component)
     {
-        component->destroy(component);
+        Component *curr_component = component;
         component = component->next;
+        destroy_component(curr_component);
     }
 
-    // Mark all the windows as stale
-    set_stale_window(this->screen->bottom_window);
+    if(this->screen)
+        // Mark all the windows as stale
+        set_stale_window(this->screen->bottom_window);
 
     // Remove the window from the list
     this->remove(this);
@@ -1105,9 +1112,10 @@ void next_focus_window(Window *this)
             // If this component can handle focus...
             if(curr->focus)
             {
-                this->focus = curr;
-                curr->focus(curr);
-                set_stale_window(this);
+                set_focus_window(this,curr);
+                //this->focus = curr;
+                //curr->focus(curr);
+                //set_stale_window(this);
                 return;
             }
         }
@@ -1121,9 +1129,10 @@ void next_focus_window(Window *this)
         // If component can handle focus...
         if(curr->focus)
         {
-            this->focus = curr;
-            curr->focus(curr);
-            set_stale_window(this);
+            set_focus_window(this,curr);
+            //this->focus = curr;
+            //curr->focus(curr);
+            //set_stale_window(this);
             return;
         }
     }while(curr = curr->next);
@@ -1152,9 +1161,10 @@ void prev_focus_window(Window *this)
             // If this component can handle focus...
             if(curr->focus)
             {
-                this->focus = curr;
-                curr->focus(curr);
-                set_stale_window(this);
+                set_focus_window(this,curr);
+                //this->focus = curr;
+                //curr->focus(curr);
+                //set_stale_window(this);
                 return;
             }
         }
@@ -1168,9 +1178,10 @@ void prev_focus_window(Window *this)
         // If this is not the current focus and the component can handle focus...
         if(curr != this->focus && curr->focus)
         {
-            this->focus = curr;
-            curr->focus(curr);
-            set_stale_window(this);
+            set_focus_window(this,curr);
+            //this->focus = curr;
+            //curr->focus(curr);
+            //set_stale_window(this);
             return;
         }
     }while(curr = curr->prev);
@@ -1223,6 +1234,16 @@ void move_down_window(Window *this)
     this->remove(this);
     this->insert(this->prev,this);
     set_stale_window(this);
+}
+
+void clear_window_method(Window *this)
+{
+    if(this == NULL)
+        return;
+
+    // Clear the window
+    for(int i=0;i<(this->height*this->width);i++)
+        this->buffer[i] = L' ';
 }
 
 // Function to convert a single-byte char to a wide character
@@ -1309,6 +1330,152 @@ int print_window_method(Window *this, int row, int col, const char *format, va_l
     return total_written;
 }
 
+int wprint_window_method(Window *this, int row, int col, const wchar_t *format, va_list args)
+{
+    if (this == NULL || format == NULL || this->buffer == NULL)
+        return 0;
+
+    // Create a temporary formatted wide string
+    wchar_t *formatted_string = NULL;
+    int     formatted_string_size = 64535;
+    /*va_list args_copy;
+    va_copy(args_copy, args);
+    int formatted_string_size = vswprintf(NULL, 0, format, args_copy);
+    va_end(args_copy);
+    
+    if (formatted_string_size < 0) {
+        return 0; // Error in formatting
+    }*/
+
+    // Allocate memory for the formatted string
+    formatted_string = (wchar_t *)malloc((formatted_string_size + 1) * sizeof(wchar_t));
+    if (formatted_string == NULL) {
+        return 0; // Memory allocation error
+    }
+    int length = vswprintf(formatted_string, formatted_string_size + 1, format, args);
+
+    int total_written = 0;
+    int current_row = row;
+    int current_col = col;
+    for (int i = 0; i < length; i++)
+    {
+        wchar_t c = formatted_string[i];
+
+        if(c == L'\n')
+        {
+            current_row++;
+            current_col = col;
+        }
+        else if(c == L'\r')
+        {
+            current_col = col;
+        }
+        else
+        {
+           // Calculate the position in the buffer. The buffer is a string of size width x height
+            int pos = (current_row * this->width) + current_col;
+
+            //Check if this position is valid.
+            if(pos < 0 || pos >= (this->height * this->width))
+            {
+               continue; // Do not write if past the end of the buffer.
+            }
+
+            if(current_col >= this->width)
+            {
+              // If we have reached the end of a line, then we will not write it.
+              // However, if we are wrapping, then we will handle this later.
+              if(!this->wrap)
+                continue;
+            }
+
+            // Write one character to the buffer
+            this->buffer[pos] = c;
+            current_col++;
+            total_written++;
+        }
+    }
+
+    // If the window was written to...
+    if(total_written > 0)
+        set_stale_window(this);
+
+    //Free the formatted string
+    free(formatted_string);
+    return total_written;
+}
+
+/*int wprint_window_method(Window *this, int row, int col, const wchar_t *format, va_list args)
+{
+    if (this == NULL || format == NULL || this->buffer == NULL)
+        return 0;
+
+    // Create a temporary formatted wide string
+    wchar_t *formatted_string = NULL;
+    int formatted_string_size = vswprintf(NULL, 0, format, args);
+    if (formatted_string_size < 0) {
+        return 0; // Error in formatting
+    }
+
+    // Allocate memory for the formatted string
+    formatted_string = (wchar_t *)malloc((formatted_string_size + 1) * sizeof(wchar_t));
+    if (formatted_string == NULL) {
+        return 0; // Memory allocation error
+    }
+    vswprintf(formatted_string, formatted_string_size + 1, format, args);
+
+    int total_written = 0;
+    int current_row = row;
+    int current_col = col;
+    for (int i = 0; i < formatted_string_size; i++)
+    {
+        char c = formatted_string[i];
+
+        if(c == '\n')
+        {
+            current_row++;
+            current_col = col;
+        }
+        else if(c == '\r')
+        {
+            current_col = col;
+        }
+        else
+        {
+           // Calculate the position in the buffer. The buffer is a string of size width x height
+            int pos = (current_row * this->width) + current_col;
+
+            //Check if this position is valid.
+            if(pos < 0 || pos >= (this->height * this->width))
+            {
+               continue; // Do not write if past the end of the buffer.
+            }
+
+            if(current_col >= this->width)
+            {
+              // If we have reached the end of a line, then we will not write it.
+              // However, if we are wrapping, then we will handle this later.
+              if(!this->wrap)
+                continue;
+            }
+
+            // Write one character to the buffer
+            this->buffer[pos] = char_to_wchar(c);
+            current_col++;
+            total_written++;
+        }
+    }
+
+    // If the window was written to...
+    if(total_written > 0)
+        set_stale_window(this);
+
+    //Free the formatted string
+    free(formatted_string);
+    return total_written;
+}*/
+
+
 Window *allocate_window(int row, int col, int height, int width, char *label, bool box)
 {
     Window *window = malloc(sizeof(Window));
@@ -1351,8 +1518,10 @@ Window *allocate_window(int row, int col, int height, int width, char *label, bo
     window->move_bottom = move_bottom_window;
     window->move_up = move_up_window;
     window->move_down = move_bottom_window;
+    window->clear_window = clear_window_method;
     window->print = print_window_method;
-
+    window->wprint = wprint_window_method;
+    
     window->notify_action = NULL;
     window->notify_input = NULL;
     window->notify_tick = NULL;
@@ -1366,7 +1535,7 @@ Window *allocate_window(int row, int col, int height, int width, char *label, bo
     window->component_head = NULL;
     window->component_tail = NULL;
 
-    // Create the ncurses window
+    // Create the window buffer
     if(height != 0 || width != 0)
     {
         window->buffer = malloc(((height * width)+1)*sizeof(wchar_t));
@@ -1375,6 +1544,7 @@ Window *allocate_window(int row, int col, int height, int width, char *label, bo
             free(window);
             return(NULL);
         }
+        memset(window->buffer, L' ', (height * width)*sizeof(wchar_t));
         window->buffer[height * width] = L'\0';
     }
     else
@@ -1395,7 +1565,6 @@ Window *create_window(Window *screen, int row, int col, int height, int width, c
 }
 
 // Components -----------------------------------------------------------------
-
 void add_component(Window *win, Component *component)
 {
     if(win == NULL || component == NULL)
@@ -1451,10 +1620,14 @@ void remove_component(Window *win, Component *component)
     component->prev = NULL;    
 }
 
-void destroy_component(Component *component)
+void destroy_component_method(Component *component)
 {
     // Remove the component from the window
     component->remove(component->parent, component);
+    
+    if(component->window != NULL)
+        destroy_window(component->window);
+
     free(component);
 }
 
@@ -1486,6 +1659,7 @@ Component *create_component(Component *component, Window *win, int row, int col,
         component->label = "";
 
     component->parent = win;
+    component->window = NULL;
     component->row = row;
     component->col = col;
     component->height = height;
@@ -1501,7 +1675,7 @@ Component *create_component(Component *component, Window *win, int row, int col,
     
     component->add = add_component;
     component->remove = remove_component;
-    component->destroy = destroy_component;
+    component->destroy = destroy_component_method;
     
     component->read_only = read_only_component_method;
     component->set_format = set_format_component_method;
@@ -1593,15 +1767,6 @@ int input_list(Component *base, int ch)
 
             // Stash a pointer to this component context for the action handler
             get_string->prev = base;
-            // Pass base-parent as the first parameter
-            /*get_string_input(base->row+list->selected-list->top_visible+1, base->col, "Enter Item:", &list->items[list->selected*list->size_max], MAX_TEXT_FIELD_LENGTH);
-            if(++list->selected == list->size && list->size < LIST_MAX_SIZE)
-                strncpy(&list->items[list->size++ * list->size_max],"",MAX_TEXT_FIELD_LENGTH-1);
-            else if(list->size == LIST_MAX_SIZE)
-            {
-                --list->selected;
-                display_error_popup(base->parent->screen, "Max List Items Reached",MESSAGE_DURATION);
-            }*/
             break;
         default:
             // Did not consume the input
@@ -1963,6 +2128,419 @@ Component *create_text(Window *win, int row, int col, const char *text)
         return(NULL);
 
     base->update = update_text;
+    return(base);
+}
+
+#define PREVIOUS_LINE_PTR(editor)       (wchar_t *)(editor->line[(editor->cursor_row-1>=0)?(editor->cursor_row-1):0])
+#define CURRENT_LINE_PTR(editor)        (wchar_t *)(editor->line[editor->cursor_row])
+#define NEXT_LINE_PTR(editor)           (wchar_t *)(editor->line[(editor->cursor_row+1<editor->rows)?editor->cursor_row+1:editor->rows])
+#define CURRENT_BUFFER_PTR(editor)      (wchar_t *)(CURRENT_LINE_PTR(editor)+editor->cursor_col)
+#define CURRENT_BUFFER_OFFSET(editor)   (int)(CURRENT_BUFFER_PTR(editor) - editor->buffer)
+#define START_BUFFER_PTR(editor)        (wchar_t *)&editor->buffer[editor->select_start]
+#define END_BUFFER_PTR(editor)          (wchar_t *)&editor->buffer[editor->select_end]
+#define PREVIOUS_CHARACTER(editor)      (wchar_t)((editor->cursor_col == 0 && editor->cursor_row == 0)?L'\0':CURRENT_BUFFER_PTR(editor)[-1])
+#define CURRENT_CHARACTER(editor)       (wchar_t)(CURRENT_BUFFER_PTR(editor)[0])
+#define NEXT_CHARACTER(editor)          (wchar_t)((editor->cursor_row == editor->rows-1 && editor->cursor_col == line_length(editor, editor->cursor_row)-1)?L'\0':CURRENT_BUFFER_PTR(editor)[1])
+
+int calculate_line_number(Text_Editor *editor)
+{
+    for(int i = 1; i < editor->rows; i++)
+        if(editor->line[i] > CURRENT_BUFFER_PTR(editor))
+            return(i-1);
+    return(editor->rows - 1);
+}
+
+int line_length(Text_Editor *editor, int line)
+{
+    if(line < 0 || line >= editor->rows)
+        return(0);
+    
+    for(int i = 0; i < editor->cols; i++)
+        if(editor->line[line][i] == L'\n' || editor->line[line][i] == L'\0')
+            return(i);
+
+    return(editor->cols);
+}
+
+int set_cursor(Text_Editor *editor, int row, int col)
+{   
+    Component *base = (Component *)editor;
+
+    // If out of bounds...
+    if(editor == NULL || row < 0 || row > editor->rows || col < 0 || col > editor->cols)
+        return(-1);
+
+    // If the new column is beyond the new line...
+    if(col>line_length(editor,row))
+        col = line_length(editor,row);
+    
+    // If the same as the current location...
+    if(editor->cursor_row == row && editor->cursor_col == col)
+        return(0);
+
+    editor->cursor_row = row;
+    editor->cursor_col = col;
+
+    // If the cursor is left or right of the visible window...
+    if(editor->cursor_col < editor->left_visible)
+        editor->left_visible = editor->cursor_col;
+    else if(editor->cursor_col - editor->left_visible >= base->window->width)
+        editor->left_visible = editor->cursor_col - base->window->width + 1;
+
+    // If the cursor is above or below the visible window...
+    if(editor->cursor_row < editor->top_visible)
+        editor->top_visible = editor->cursor_row;
+    else if(editor->cursor_row - editor->top_visible >= base->window->height)
+        editor->top_visible = editor->cursor_row - base->window->height + 1;
+
+    return(1);
+}
+
+int set_cursor_ptr(Text_Editor *editor, wchar_t *ptr)
+{
+    if(editor == NULL || ptr == NULL || ptr < editor->buffer || ptr > editor->buffer + editor->buffer_size)
+        return(-1);
+
+    int row = 0;
+    int col =0;
+
+    if(ptr > editor->buffer)
+    {
+        int i; 
+        for(i = 0; i < editor->rows && editor->line[i] <= ptr; ++i);
+        row = --i;
+        wchar_t *curr_line_ptr = editor->line[i];
+        col = ptr - curr_line_ptr;
+    }
+
+    return(set_cursor(editor,row,col));
+}
+
+void insert_text(Text_Editor *editor, wchar_t *text)
+{
+    if(editor == NULL || text == NULL)
+        return;
+
+    // Determine the length of the text to be inserted
+    int length = wcslen(text);
+    if(length == 0)
+        return;
+
+    // If the length will exceed the buffer size...
+    if(wcslen(editor->buffer) + length > editor->buffer_size -1)
+        length = editor->buffer_size - wcslen(editor->buffer) - 1;
+
+    // If there is room for some or all of the new text...
+    if(length > 0)
+    {
+        wchar_t *start = CURRENT_BUFFER_PTR(editor);
+        wchar_t *end = CURRENT_BUFFER_PTR(editor) + length;
+        
+        // Make room and insert the text
+        memmove(end,start,(wcslen(start)+1)*sizeof(wchar_t));
+        memcpy(start,text,length*sizeof(wchar_t));
+
+        // Rebuild the line array because no telling what we just did
+        configure_text_editor(editor);
+        set_cursor_ptr(editor,end);
+    }
+}
+
+void replace_text(Text_Editor *editor, wchar_t *text)
+{
+    if(editor == NULL || text == NULL)
+        return;
+
+    // Determine the length of the text to be replaced
+    int length = wcslen(text);
+    if(length == 0)
+        return;
+
+    // If the length will exceed the buffer size...
+    if(CURRENT_BUFFER_PTR(editor) + length > editor->buffer + editor->buffer_size -1)
+        length = length - ((CURRENT_BUFFER_PTR(editor) + length) - &editor->buffer[editor->buffer_size-1]);
+    
+    wchar_t *start = START_BUFFER_PTR(editor);
+    wchar_t *end = END_BUFFER_PTR(editor);
+    // If there is room for some or all of the new text...
+    if(length > 0)
+    {
+        memcpy(start,text,length*sizeof(wchar_t));
+
+        // Rebuild the lines array because no telling what we just did
+        configure_text_editor(editor);
+        set_cursor_ptr(editor,end);
+    }
+
+    // Restore the selected area to none
+    editor->select_start = -1;
+    editor->select_end = -1;
+}
+
+void delete_text(Text_Editor *editor)
+{
+    if(editor == NULL || editor->select_start == -1 || editor->select_end == -1)
+        return;
+
+    wchar_t *start;
+    wchar_t *end;
+
+    // If end is less than start...
+    if(END_BUFFER_PTR(editor) < START_BUFFER_PTR(editor))
+    {
+        start = END_BUFFER_PTR(editor);
+        end = START_BUFFER_PTR(editor)+1;
+    }
+    else
+    {
+        start = START_BUFFER_PTR(editor);
+        end = END_BUFFER_PTR(editor)+1;
+    }
+    
+    int length = wcslen(end)+1;
+    memmove(start,end,length*sizeof(wchar_t));
+
+    // Rebuild the lines array because no telling what we just did
+    configure_text_editor(editor);
+    set_cursor_ptr(editor,start);
+
+    // Restore the selected area to none
+    editor->select_start = -1;
+    editor->select_end = -1;
+
+    Component *base = (Component *)editor;
+    set_stale_window(base->parent);
+}
+
+//select_text(Text_Editor *editor, int row, int col, bool new);
+//deselect_text(Text_Editor *editor);
+
+void update_editor_method(Component *base)
+{
+    Text_Editor *editor = (Text_Editor *)base;
+
+    // Clear the window
+    clear_window(base->window);
+
+    // Draw the text window
+    for(int i = 0; i < editor->rows; i++)
+        wprint_window(base->window, i, 0, L"%ls", editor->line[i] + editor->left_visible);
+
+    // If this component has focus...
+    if(base->parent->focus == base)
+    {
+        // Update the position of the cursor in the component window
+        base->window->cur_row = editor->cursor_row - editor->top_visible;
+        base->window->cur_col = editor->cursor_col - editor->left_visible;
+    }
+
+    // Wrte the component window to the parent window of the component
+    write_window(base->parent,base->window);
+
+    print_window(base->parent,base->parent->height-1, 2, "Row-%d/%d Col-%d/%d Line-%d Buffer-%d",editor->cursor_row,editor->rows,editor->cursor_col,editor->cols,line_length(editor,editor->cursor_row),wcslen(editor->buffer));
+}
+
+int input_editor_method(Component *base, int ch)
+{
+    Text_Editor *editor = (Text_Editor *)base;
+
+    switch(ch)
+    {
+        case KEY_HOME:
+            // Move the cursor to the first column and pan the window
+            set_cursor(editor,editor->cursor_row,0);
+            break;
+        case KEY_END:
+            // Move the cursor to the end of the line
+            set_cursor(editor,editor->cursor_row,line_length(editor,editor->cursor_row));
+            break;
+        case KEY_LEFT:
+            // If there is room the move left...
+            if(editor->cursor_col > 0)
+                set_cursor(editor,editor->cursor_row,editor->cursor_col-1);
+            // Else if there is room to move up...
+            else if(editor->cursor_row > 0)
+                set_cursor(editor,editor->cursor_row-1,line_length(editor,editor->cursor_row-1));
+            break;
+        case KEY_RIGHT:
+            // If there is room to move right...
+            if(editor->cursor_col < line_length(editor,editor->cursor_row))
+                set_cursor(editor,editor->cursor_row,editor->cursor_col+1);
+            // Else if the is room to move down...
+            else if(editor->cursor_row < editor->rows-1)
+                set_cursor(editor,editor->cursor_row+1,0);
+            break;
+        case KEY_UP:
+            // If there is room to move up...
+            if(editor->cursor_row > 0)
+                set_cursor(editor,editor->cursor_row-1,editor->cursor_col);
+            break;
+        case KEY_DOWN:
+            // If there is room to move down...
+            if(editor->cursor_row < editor->rows-1)
+                set_cursor(editor,editor->cursor_row+1,editor->cursor_col);
+            break;
+        case KEY_BACKSPACE:
+            // If nothing is currently selected...
+            if(editor->select_start == -1 && editor->select_end == -1)
+            {
+                if(editor->buffer < CURRENT_BUFFER_PTR(editor))
+                    editor->select_start = editor->select_end = CURRENT_BUFFER_OFFSET(editor)-1;
+                else
+                    break;
+            }
+            delete_text(editor);
+            break;
+        case KEY_DC:
+            // If nothing is currently selected...
+            if(editor->select_start == -1 && editor->select_end == -1)
+                editor->select_start = editor->select_end = CURRENT_BUFFER_OFFSET(editor);
+            delete_text(editor);
+            break;
+        case '\n':
+        case KEY_ENTER:
+            if(base->parent->insert_key)
+                insert_text(editor,L"\n");
+            else
+                replace_text(editor,L"\n");
+            break;
+        case KEY_ESC:
+            break;
+        default:
+            // If this is a printable character...
+            if(isprint(ch))
+            {
+                wchar_t key_character[] = {char_to_wchar(ch), L'\0'};
+                // If insert is enabled...
+                if(base->parent->insert_key)
+                    insert_text(editor,key_character);
+                // Else replace is enabled...
+                else
+                    replace_text(editor,key_character);
+            }
+            else
+                // Did not consume the input
+                return(0);
+    }
+    // Consumed the input
+    set_stale_window(base->parent);
+    return(1);
+}
+
+void focus_editor_method(Component *base)
+{
+    Text_Editor *editor = (Text_Editor *)base;
+    // Set the cursor for the component window
+    base->window->cur_col = editor->cursor_col - editor->left_visible;
+    base->window->cur_row = editor->cursor_row - editor->top_visible;
+    set_cursor_window(base->window,true);
+}
+
+void configure_editor_method(Component *base)
+{
+    if(base == NULL)
+        return;
+
+    Text_Editor *editor = (Text_Editor *)base;
+
+    editor->rows = 0;
+    editor->cols = 0;
+
+    // If there is an existing array of lines...
+    if(editor->line)
+        free(editor->line);
+
+    editor->line = malloc(sizeof(wchar_t *));
+    editor->line[0] = editor->buffer;
+    
+    int i = 0;
+    int column = 0;
+    while(i < editor->buffer_size && editor->buffer[i] != L'\0')
+    {
+        // If newline...
+        if(editor->buffer[i] == L'\n')
+        {
+            editor->line = realloc(editor->line,sizeof(wchar_t *)*(editor->rows+1));
+            editor->line[editor->rows++] = &editor->buffer[i+1];
+            column = 0;
+        }
+        // Else if this is not a carriage return...
+        else if (iswprint(editor->buffer[i]))
+        {
+            //if(column == 0)
+            //    editor->line[editor->rows] = &editor->buffer[i];
+
+            if(!editor->rows)
+                editor->rows = 1;
+            ++column;
+            
+            if(column > editor->cols)
+                editor->cols = column;
+        }
+        ++i;
+    }
+    // If we have reached the end of the buffer...
+    if(i == editor->buffer_size)
+        editor->buffer[i-1] = L'\0';
+}
+
+void destroy_editor_method(Component *base)
+{
+    Text_Editor *editor = (Text_Editor *)base;
+    if(editor->line != NULL)
+        free(editor->line);
+    destroy_component_method(base);
+}
+
+Component *create_text_editor(Window *win, int row, int col, int height, int width, wchar_t *buffer, int buffer_size)
+{
+    // Check input parameters
+    if(row < 0 || col < 0 || height <= 0 || width <= 0 || buffer == NULL || buffer_size <= 0)
+        return(NULL);
+
+    // Allocate the integer
+    Text_Editor *editor = malloc(sizeof(Text_Editor));
+    if(editor == NULL)
+        return(NULL);
+    Component *base = (Component *)editor;
+
+    // Create the component
+    if((create_component(base, win, row, col, height, width, NULL)) == NULL)
+        return(NULL);
+    
+    Window *comp_window = allocate_window(row,col,height,width,NULL,false);
+    if(win == NULL)
+            return(NULL);
+                    
+    base->window = comp_window;
+    editor->buffer = buffer;
+    editor->buffer_size = buffer_size;
+    editor->cursor_row = 0;
+    editor->cursor_col = 0;
+    editor->height = height;
+    editor->width = width;
+    editor->select_start = -1;
+    editor->select_end = -1;
+    editor->top_visible = 0;
+    editor->left_visible = 0;
+    editor->line = NULL;
+
+    editor->wrap = false;
+    editor->tab_width = 4;
+
+    base->destroy = destroy_editor_method;
+    base->configure = configure_editor_method;
+    base->update = update_editor_method;
+    base->input = input_editor_method;
+    base->focus = focus_editor_method;
+
+    // Configure the line array and other members according to the
+    // contents of the buffer
+    configure_coponent(base);
+
+    // Set the focus to this new component
+    set_focus_window(win,base);
+
     return(base);
 }
 

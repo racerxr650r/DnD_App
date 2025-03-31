@@ -25,6 +25,8 @@
 #define MAX_TEXT_FIELD_LENGTH 41
 #define MAX_SKILLS 18  // Number of skills
 
+#define MAX_NOTES_LENGTH            65535
+
 // Keys
 #define KEY_SAVE_CHARACTER '\023'
 #define KEY_LOAD_CHARACTER '\014'
@@ -77,10 +79,13 @@ typedef void (*Move_Top_Window)(struct window_t *win);
 typedef void (*Move_Bottom_Window)(struct window_t *win);
 typedef void (*Move_Up_Window)(struct window_t *win);
 typedef void (*Move_Down_Window)(struct window_t *win);
+typedef void (*Clear_Window)(struct window_t *win);
 typedef int (*Print_Window)(struct window_t *win, int row, int col, const char *format, va_list args);
+typedef int (*Wprint_Window)(struct window_t *win, int row, int col, const wchar_t *format, va_list args);
 typedef int (*Write_Window)(struct window_t *win, struct window_t *this);
 typedef void (*Notify_Window)(struct window_t *win);
 
+typedef void (*Configure_Component)(struct component_t *component);
 typedef void (*Update_Component)(struct component_t *component);
 typedef int  (*Input_Component)(struct component_t *component,int input);
 typedef void (*Focus_Component)(struct component_t *component);
@@ -184,7 +189,9 @@ typedef struct window_t
     Move_Bottom_Window  move_bottom;
     Move_Up_Window      move_up;
     Move_Down_Window    move_down;
+    Clear_Window        clear_window;
     Print_Window        print;
+    Wprint_Window       wprint;
     Write_Window        write;
 
     Input_Window  notify_input;
@@ -231,6 +238,14 @@ static inline void set_stale_window(Window *this)
     return;
 }
 
+static inline void clear_window(Window *this)
+{
+    if(this != NULL)
+        if(this->clear_window != NULL)
+            this->clear_window(this);
+    return;
+}
+
 static inline int print_window(Window *this, int row, int col, const char *format, ...)
 {
     if (this == NULL || format == NULL || this->buffer == NULL)
@@ -240,6 +255,20 @@ static inline int print_window(Window *this, int row, int col, const char *forma
     va_start(args, format);
 
     int result = this->print(this, row, col, format, args);
+
+    va_end(args);
+    return(result);
+}
+
+static inline int wprint_window(Window *this, int row, int col, const wchar_t *format, ...)
+{
+    if (this == NULL || format == NULL || this->buffer == NULL)
+        return 0;
+
+    va_list args;
+    va_start(args, format);
+
+    int result = this->wprint(this, row, col, format, args);
 
     va_end(args);
     return(result);
@@ -273,9 +302,12 @@ typedef struct component_t
     const char  *format;
     
     Window  *parent;
+    Window  *window;
+    
     struct component_t *prev;
     struct component_t *next;
 
+    Configure_Component configure;
     Update_Component    update;
     Input_Component     input;
     Focus_Component     focus;
@@ -318,6 +350,22 @@ static inline int input_component(Component *this, int input)
         if(this->input != NULL)
             return(this->input(this, input));
     return(0);
+}
+
+static inline void configure_coponent(Component *this)
+{
+    if(this != NULL)
+        if(this->configure != NULL)
+            this->configure(this);
+    return;
+}
+
+static inline void destroy_component(Component *this)
+{
+    if(this != NULL)
+        if(this->destroy != NULL)
+            this->destroy(this);
+    return;
 }
 
 // If you change these, prior character files will be incompatible
@@ -405,6 +453,34 @@ static inline void set_timer(Timer *timer, unsigned int msecs)
     return;
 }
 
+Component *create_text_editor(Window *win, int row, int col, int height, int width, wchar_t *buffer, int buffer_size);
+typedef struct text_editor_t
+{
+    Component   base;
+    wchar_t     *buffer;
+    int         buffer_size;
+    wchar_t     **line;
+    int         cursor_row;
+    int         cursor_col;
+    int         rows;
+    int         cols;
+    int         height;
+    int         width;
+    int         select_start;
+    int         select_end;
+    int         top_visible;
+    int         left_visible;
+    bool        wrap;
+    int         tab_width;
+}Text_Editor;
+
+static inline void configure_text_editor(Text_Editor *editor)
+{
+    if(editor != NULL)
+        if(editor->base.configure != NULL)
+            editor->base.configure(&editor->base);
+    return;
+}
 
 Window *create_screen(void);
 int run_screen(Window *screen);
@@ -624,7 +700,7 @@ typedef struct
     Inventory   inventory;
 
     // Notes
-    char        notes[65535];
+    wchar_t     notes[MAX_NOTES_LENGTH];
 } Character;
 
 #endif //CarSheet_h
