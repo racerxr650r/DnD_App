@@ -1,0 +1,100 @@
+/*
+ * popup.c
+ *
+ * Generic pop up windows of the text windowing UI component of the Linux
+ * Console Application Framework (lcaf) library
+ *
+ * Created: 03/31/2025
+ * Author : john anderson
+ *
+ * Copyright (C) 2025 by John Anderson <racerxr650r@gmail.com>
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any 
+ * purpose with or without fee is hereby granted.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF 
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+ * SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES 
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN 
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR
+ * IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */ 
+#include "lcaf.h"
+
+int display_popup_action(Component *base, int ch)
+{
+    destroy_window(base->parent);
+    return(0);
+}
+void display_error_popup(Window *screen, const char *error_message, int milliseconds) 
+{
+    int width = strlen(error_message) + 2; // Add padding for the border
+    int height = 3;
+    int start_y = (screen->height - height) / 2;
+    int start_x = (screen->width - width) / 2;
+
+    Window *win = create_window(screen, start_y, start_x, height, width, "Error", false);
+    win->frame_type = FRAME_LIGHT_ARC;
+    create_text(win,1,1,error_message);
+    Component *base = create_timer(win,milliseconds);
+    base->notify_action = display_popup_action;    
+}
+
+void display_message_popup(Window *screen, const char *message, int milliseconds) 
+{
+    int width = strlen(message) + 2; // Add padding for the border
+    int height = 3;
+    int start_y = (screen->height - height) / 2;
+    int start_x = (screen->width - width) / 2;
+
+    Window *win = create_window(screen, start_y, start_x, height, width, NULL, false);
+    win->frame_type = FRAME_LIGHT_ARC;
+    create_text(win,1,1,message);
+    Component *base = create_timer(win,milliseconds);
+    base->notify_action = display_popup_action;    
+}
+
+Window *yes_no_popup(Window *screen, const char *message, Input_Window yes_no_input)
+{
+    int width = strlen(message) + 2; // Add padding for the border
+    int height = 3;
+    int start_y = (screen->height - height) / 2;
+    int start_x = (screen->width - width) / 2;
+
+    Window *win;
+    Component *base;
+    if(win = create_window(screen, start_y, start_x, height, width, NULL, false))
+    {
+        win->frame_type = FRAME_LIGHT_ARC;
+        if(base = create_text(win,1,1,message))
+            win->input = yes_no_input;
+        else
+        {
+            destroy_window(win);
+            win = NULL;
+        }
+    }
+    return(win);
+}
+
+Component *get_string_popup(Window *screen, char * label, char *value, int length, Input_Component handler)
+{
+    // --- Create popup window ---
+    int width = strlen(label) + length + 2; // Add padding for the border
+    int height = 3;
+    int start_y = (screen->height - height) / 2;
+    int start_x = (screen->width - width) / 2;
+
+    Window *win = create_window(screen, start_y, start_x, height, width, NULL, false);
+    if(win == NULL)
+        return(NULL);
+    win->frame_type = FRAME_LIGHT_ARC;
+
+    Component *base = create_string(win,1,1,20,label,value,length);
+    if(base == NULL)
+        return(NULL);
+    base->notify_action = handler;
+
+    return(base);
+}

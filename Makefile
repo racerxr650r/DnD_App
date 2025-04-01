@@ -11,7 +11,7 @@
 # Target executable name
 TARGET = DnD
 # Source files
-SOURCES = DnD.c
+SOURCES = DnD.c scrn.c win.c comp.c popup.c txt_edit.c
 # Object files
 OBJECTS = $(SOURCES:.c=.o)
 # Dependency files
