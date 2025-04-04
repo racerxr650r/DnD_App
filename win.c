@@ -37,7 +37,7 @@ wchar_t frame_symbols[8][10] = {
 };
 
 // Function Definitions *******************************************************
-void frame_window_method(Window *this)
+local void winFrameMethod(Window *this)
 {
     if(this == NULL || this->frame_type == FRAME_NONE)
         return;
@@ -66,22 +66,22 @@ void frame_window_method(Window *this)
     this->buffer[(row*this->width)+col] = frame_symbols[this->frame_type][BOTTOM_RIGHT];
 }    
 
-void update_window(Window *this)
+local void winUpdateMethod(Window *this)
 {
     if(this == NULL)
         return;
 
     // Clear the window
-    clear_window(this);
+    winClear(this);
 
-    frame_window(this);
+    winFrame(this);
 
     // If this window has a label...
     if(this->label != NULL)
     {
         // Display the window label in the top middle
         int offset = (this->width - strlen(this->label)) / 2;
-        print_window(this, 0, offset, "%s", this->label);
+        winPrint(this, 0, offset, "%s", this->label);
         if(this->frame_type != FRAME_NONE)
         {
             this->buffer[offset-1] = frame_symbols[this->frame_type][LEFT_BREAK];
@@ -98,23 +98,11 @@ void update_window(Window *this)
         component = component->next;
     }
 
-    // If there is a component with focus...
-    /*if(this->focus != NULL)
-    {
-        // Set the focus component
-        if(this->focus->focus != NULL)
-            this->focus->focus(this->focus);
-    }
-    // Else there is no component with focus...
-    else if(this->set_cursor)
-        this->set_cursor(this, false);*/
-
     // If this window has an update notification...
-    if(this->notify_update)
-        this->notify_update(this);
+    winNotifyUpdate(this);
 }
 
-int write_window_method(Window *win, Window *this)
+local int winWriteMethod(Window *win, Window *this)
 {
     if (win == NULL || this == NULL || win->buffer == NULL || this->buffer == NULL)
         return 0;
@@ -147,12 +135,12 @@ int write_window_method(Window *win, Window *this)
     // Mark the source window fresh
     this->stale = false;
     // Mark the destination window stale
-    set_stale_window(win);   
+    winSetStale(win);   
 
     return copy_count;
 }
 
-int input_window(Window *this, int ch)
+local int winInputMethod(Window *this, int ch)
 {
     int result;
 
@@ -203,12 +191,12 @@ int input_window(Window *this, int ch)
     }
 
     // Mark the window as stale
-    set_stale_window(this);
+    winSetStale(this);
 
     return(1);
 }
 
-int add_window(Window *screen, Window *this)
+local int winAddMethod(Window *screen, Window *this)
 {
     if(this == NULL || screen == NULL)
         return(-1);
@@ -231,7 +219,7 @@ int add_window(Window *screen, Window *this)
     }
 
     screen->top_window = this;
-    set_stale_window(this);
+    winSetStale(this);
     this->screen = screen;
 
     if(this->notify_focus)
@@ -240,7 +228,7 @@ int add_window(Window *screen, Window *this)
     return(0);
 }
 
-void insert_window(Window *ref, Window *this)
+local void winInsertMethod(Window *ref, Window *this)
 {
     if(this == NULL || ref == NULL)
         return;
@@ -256,10 +244,10 @@ void insert_window(Window *ref, Window *this)
     this->next = ref;
     ref->prev = this;
     this->screen = ref->screen;
-    set_stale_window(this);
+    winSetStale(this);
 }
 
-void remove_window(Window *this)
+local void winRemoveMethod(Window *this)
 {
     if(this == NULL || this->screen == NULL)
         return;
@@ -299,10 +287,10 @@ void remove_window(Window *this)
         this->next->prev = this->prev;
     }
 
-    set_stale_window(screen->bottom_window);
+    winSetStale(screen->bottom_window);
 }
 
-void stale_window_method(Window *this)
+local void winSetStaleMethod(Window *this)
 {
     if(this == NULL)
         return;
@@ -324,7 +312,7 @@ void stale_window_method(Window *this)
     }
 }
 
-void destroy_window_method(Window *this)
+local void winDestroyMethod(Window *this)
 {
     if(this == NULL)
         return;
@@ -339,12 +327,12 @@ void destroy_window_method(Window *this)
     {
         Component *curr_component = component;
         component = component->next;
-        destroy_component(curr_component);
+        compDestroy(curr_component);
     }
 
     if(this->screen)
         // Mark all the windows as stale
-        set_stale_window(this->screen->bottom_window);
+        winSetStale(this->screen->bottom_window);
 
     // Remove the window from the list
     this->remove(this);
@@ -355,16 +343,16 @@ void destroy_window_method(Window *this)
     free(this);
 }
 
-void set_cursor_window_method(Window *this, bool enable)
+local void winSetCursorMethod(Window *this, bool enable)
 {
     if(this == NULL)
         return;
 
     this->cursor_type = enable ? (this->insert_key ? CURSOR_INSERT : CURSOR_OVERWRITE) : CURSOR_NONE;
-    set_stale_window(this);
+    winSetStale(this);
 }
 
-void set_focus_window_method(Window *this, Component *component)
+local void winSetFocusMethod(Window *this, Component *component)
 {
     if(this == NULL || component == NULL || component->focus == NULL)
         return;
@@ -379,10 +367,10 @@ void set_focus_window_method(Window *this, Component *component)
         component->notify_focus(component);
 
     // Mark the window to be redrawn
-    set_stale_window(this);
+    winSetStale(this);
 }
 
-void next_focus_window(Window *this)
+local void winNextFocusMethod(Window *this)
 {
     if(this == NULL)
         return;
@@ -402,7 +390,7 @@ void next_focus_window(Window *this)
             // If this component can handle focus...
             if(curr->focus)
             {
-                set_focus_window(this,curr);
+                winSetFocus(this,curr);
                 //this->focus = curr;
                 //curr->focus(curr);
                 //set_stale_window(this);
@@ -419,7 +407,7 @@ void next_focus_window(Window *this)
         // If component can handle focus...
         if(curr->focus)
         {
-            set_focus_window(this,curr);
+            winSetFocus(this,curr);
             //this->focus = curr;
             //curr->focus(curr);
             //set_stale_window(this);
@@ -431,7 +419,7 @@ void next_focus_window(Window *this)
     this->focus = NULL;
 }
 
-void prev_focus_window(Window *this)
+local void WinPrevFocusMethod(Window *this)
 {
     if(this == NULL)
         return;
@@ -451,7 +439,7 @@ void prev_focus_window(Window *this)
             // If this component can handle focus...
             if(curr->focus)
             {
-                set_focus_window(this,curr);
+                winSetFocus(this,curr);
                 //this->focus = curr;
                 //curr->focus(curr);
                 //set_stale_window(this);
@@ -468,7 +456,7 @@ void prev_focus_window(Window *this)
         // If this is not the current focus and the component can handle focus...
         if(curr != this->focus && curr->focus)
         {
-            set_focus_window(this,curr);
+            winSetFocus(this,curr);
             //this->focus = curr;
             //curr->focus(curr);
             //set_stale_window(this);
@@ -480,27 +468,27 @@ void prev_focus_window(Window *this)
     this->focus = NULL;
 }
 
-void move_top_window(Window *this)
+local void winMoveTopMethod(Window *this)
 {
     if(this == NULL || this == this->screen->top_window)
         return;
 
     this->remove(this);
     this->add(this->screen,this);
-    set_stale_window(this);
+    winSetStale(this);
 }
 
-void move_bottom_window(Window *this)
+local void winMoveBottomMethod(Window *this)
 {
     if(this == NULL || this == this->screen->bottom_window)
         return;
 
     this->remove(this);
     this->insert(this->screen->bottom_window,this);
-    set_stale_window(this);
+    winSetStale(this);
 }
 
-void move_up_window(Window *this)
+local void winMoveUpMethod(Window *this)
 {
     if(this == NULL || this == this->screen->top_window)
         return;
@@ -513,20 +501,20 @@ void move_up_window(Window *this)
     else
         this->add(this->screen,this);
 
-    set_stale_window(this);
+    winSetStale(this);
 }
 
-void move_down_window(Window *this)
+local void winMoveDownMethod(Window *this)
 {
     if(this == NULL || this == this->screen->bottom_window)
         return;
 
     this->remove(this);
     this->insert(this->prev,this);
-    set_stale_window(this);
+    winSetStale(this);
 }
 
-void clear_window_method(Window *this)
+local void winClearMethod(Window *this)
 {
     if(this == NULL)
         return;
@@ -537,7 +525,7 @@ void clear_window_method(Window *this)
 }
 
 // Function to convert a single-byte char to a wide character
-wchar_t char_to_wchar(char c) 
+wchar_t charToWchar(char c) 
 {
     mbstate_t state;
     memset(&state, 0, sizeof(state));
@@ -553,7 +541,7 @@ wchar_t char_to_wchar(char c)
     return wc;
 }
 
-int print_window_method(Window *this, int row, int col, const char *format, va_list args)
+local int winPrintMethod(Window *this, int row, int col, const char *format, va_list args)
 {
     if (this == NULL || format == NULL || this->buffer == NULL)
         return 0;
@@ -606,7 +594,7 @@ int print_window_method(Window *this, int row, int col, const char *format, va_l
             }
 
             // Write one character to the buffer
-            this->buffer[pos] = char_to_wchar(c);
+            this->buffer[pos] = charToWchar(c);
             current_col++;
             total_written++;
         }
@@ -614,14 +602,14 @@ int print_window_method(Window *this, int row, int col, const char *format, va_l
 
     // If the window was written to...
     if(total_written > 0)
-        set_stale_window(this);
+        winSetStale(this);
 
     //Free the formatted string
     free(formatted_string);
     return total_written;
 }
 
-int wprint_window_method(Window *this, int row, int col, const wchar_t *format, va_list args)
+local int winWprintMethod(Window *this, int row, int col, const wchar_t *format, va_list args)
 {
     if (this == NULL || format == NULL || this->buffer == NULL)
         return 0;
@@ -629,14 +617,6 @@ int wprint_window_method(Window *this, int row, int col, const wchar_t *format, 
     // Create a temporary formatted wide string
     wchar_t *formatted_string = NULL;
     int     formatted_string_size = 64535;
-    /*va_list args_copy;
-    va_copy(args_copy, args);
-    int formatted_string_size = vswprintf(NULL, 0, format, args_copy);
-    va_end(args_copy);
-    
-    if (formatted_string_size < 0) {
-        return 0; // Error in formatting
-    }*/
 
     // Allocate memory for the formatted string
     formatted_string = (wchar_t *)malloc((formatted_string_size + 1) * sizeof(wchar_t));
@@ -689,14 +669,14 @@ int wprint_window_method(Window *this, int row, int col, const wchar_t *format, 
 
     // If the window was written to...
     if(total_written > 0)
-        set_stale_window(this);
+        winSetStale(this);
 
     //Free the formatted string
     free(formatted_string);
     return total_written;
 }
 
-Window *allocate_window(int row, int col, int height, int width, char *label, bool box)
+Window *winAllocate(int row, int col, int height, int width, char *label, bool box)
 {
     Window *window = malloc(sizeof(Window));
     if(window == NULL)
@@ -710,37 +690,38 @@ Window *allocate_window(int row, int col, int height, int width, char *label, bo
     window->cur_row = 0;
     window->cur_col = 0;
     window->cursor_type = CURSOR_NONE;
-    window->insert_key = true;
     window->label = label;
     window->focus = NULL;
+    window->insert_key = true;
     window->wrap = false;
     window->stale = true;
+    window->mark_destroy = false;
     window->frame_type = FRAME_NONE;
     window->screen = NULL;
 
     window->initialize = NULL;
     window->configure = NULL;
-    window->frame = frame_window_method;
-    window->update = update_window;
-    window->write = write_window_method;
-    window->input = input_window;
-    window->destroy = destroy_window_method;
+    window->frame = winFrameMethod;
+    window->update = winUpdateMethod;
+    window->write = winWriteMethod;
+    window->input = winInputMethod;
+    window->destroy = winDestroyMethod;
 
-    window->add = add_window;
-    window->insert = insert_window;
-    window->remove = remove_window;
-    window->set_stale = stale_window_method;
-    window->set_cursor = set_cursor_window_method;
-    window->set_focus = set_focus_window_method;
-    window->next_focus = next_focus_window;
-    window->prev_focus = prev_focus_window;
-    window->move_top = move_top_window;
-    window->move_bottom = move_bottom_window;
-    window->move_up = move_up_window;
-    window->move_down = move_bottom_window;
-    window->clear_window = clear_window_method;
-    window->print = print_window_method;
-    window->wprint = wprint_window_method;
+    window->add = winAddMethod;
+    window->insert = winInsertMethod;
+    window->remove = winRemoveMethod;
+    window->set_stale = winSetStaleMethod;
+    window->set_cursor = winSetCursorMethod;
+    window->set_focus = winSetFocusMethod;
+    window->next_focus = winNextFocusMethod;
+    window->prev_focus = WinPrevFocusMethod;
+    window->move_top = winMoveTopMethod;
+    window->move_bottom = winMoveBottomMethod;
+    window->move_up = winMoveUpMethod;
+    window->move_down = winMoveDownMethod;
+    window->clear_window = winClearMethod;
+    window->print = winPrintMethod;
+    window->wprint = winWprintMethod;
     
     window->notify_action = NULL;
     window->notify_input = NULL;
@@ -773,9 +754,9 @@ Window *allocate_window(int row, int col, int height, int width, char *label, bo
     return(window);
 }
 
-Window *create_window(Window *screen, int row, int col, int height, int width, char *label, bool box)
+Window *winCreate(Window *screen, int row, int col, int height, int width, char *label, bool box)
 {
-    Window *window = allocate_window(row, col, height, width, label, box);
+    Window *window = winAllocate(row, col, height, width, label, box);
 
     // If the window was successfully allocated and configured...
     if(window != NULL)

@@ -22,6 +22,7 @@
  */ 
 #include "lcaf.h"
 
+// Local Macros ---------------------------------------------------------------
 #define PREVIOUS_LINE_PTR(editor)       (wchar_t *)(editor->line[(editor->cursor_row-1>=0)?(editor->cursor_row-1):0])
 #define CURRENT_LINE_PTR(editor)        (wchar_t *)(editor->line[editor->cursor_row])
 #define NEXT_LINE_PTR(editor)           (wchar_t *)(editor->line[(editor->cursor_row+1<editor->rows)?editor->cursor_row+1:editor->rows])
@@ -33,15 +34,16 @@
 #define CURRENT_CHARACTER(editor)       (wchar_t)(CURRENT_BUFFER_PTR(editor)[0])
 #define NEXT_CHARACTER(editor)          (wchar_t)((editor->cursor_row == editor->rows-1 && editor->cursor_col == line_length(editor, editor->cursor_row)-1)?L'\0':CURRENT_BUFFER_PTR(editor)[1])
 
-int calculate_line_number(Text_Editor *editor)
+// Local Functions ------------------------------------------------------------
+/*local int texteditLineNumber(Text_Editor *editor)
 {
     for(int i = 1; i < editor->rows; i++)
         if(editor->line[i] > CURRENT_BUFFER_PTR(editor))
             return(i-1);
     return(editor->rows - 1);
-}
+}*/
 
-int line_length(Text_Editor *editor, int line)
+local int texteditLineLen(Text_Editor *editor, int line)
 {
     if(line < 0 || line >= editor->rows)
         return(0);
@@ -53,7 +55,7 @@ int line_length(Text_Editor *editor, int line)
     return(editor->cols);
 }
 
-int set_cursor(Text_Editor *editor, int row, int col)
+local int txteditSetCursor(Text_Editor *editor, int row, int col)
 {   
     Component *base = (Component *)editor;
 
@@ -62,8 +64,8 @@ int set_cursor(Text_Editor *editor, int row, int col)
         return(-1);
 
     // If the new column is beyond the new line...
-    if(col>line_length(editor,row))
-        col = line_length(editor,row);
+    if(col>texteditLineLen(editor,row))
+        col = texteditLineLen(editor,row);
     
     // If the same as the current location...
     if(editor->cursor_row == row && editor->cursor_col == col)
@@ -87,7 +89,7 @@ int set_cursor(Text_Editor *editor, int row, int col)
     return(1);
 }
 
-int set_cursor_ptr(Text_Editor *editor, wchar_t *ptr)
+local int txteditSetCursorPtr(Text_Editor *editor, wchar_t *ptr)
 {
     if(editor == NULL || ptr == NULL || ptr < editor->buffer || ptr > editor->buffer + editor->buffer_size)
         return(-1);
@@ -104,10 +106,10 @@ int set_cursor_ptr(Text_Editor *editor, wchar_t *ptr)
         col = ptr - curr_line_ptr;
     }
 
-    return(set_cursor(editor,row,col));
+    return(txteditSetCursor(editor,row,col));
 }
 
-void insert_text(Text_Editor *editor, wchar_t *text)
+local void txteditInsertText(Text_Editor *editor, wchar_t *text)
 {
     if(editor == NULL || text == NULL)
         return;
@@ -132,12 +134,12 @@ void insert_text(Text_Editor *editor, wchar_t *text)
         memcpy(start,text,length*sizeof(wchar_t));
 
         // Rebuild the line array because no telling what we just did
-        configure_text_editor(editor);
-        set_cursor_ptr(editor,end);
+        txteditConfigure(editor);
+        txteditSetCursorPtr(editor,end);
     }
 }
 
-void replace_text(Text_Editor *editor, wchar_t *text)
+local void txteditReplaceText(Text_Editor *editor, wchar_t *text)
 {
     if(editor == NULL || text == NULL)
         return;
@@ -159,8 +161,8 @@ void replace_text(Text_Editor *editor, wchar_t *text)
         memcpy(start,text,length*sizeof(wchar_t));
 
         // Rebuild the lines array because no telling what we just did
-        configure_text_editor(editor);
-        set_cursor_ptr(editor,end);
+        txteditConfigure(editor);
+        txteditSetCursorPtr(editor,end);
     }
 
     // Restore the selected area to none
@@ -168,7 +170,7 @@ void replace_text(Text_Editor *editor, wchar_t *text)
     editor->select_end = -1;
 }
 
-void delete_text(Text_Editor *editor)
+local void txteditDeleteText(Text_Editor *editor)
 {
     if(editor == NULL || editor->select_start == -1 || editor->select_end == -1)
         return;
@@ -192,30 +194,31 @@ void delete_text(Text_Editor *editor)
     memmove(start,end,length*sizeof(wchar_t));
 
     // Rebuild the lines array because no telling what we just did
-    configure_text_editor(editor);
-    set_cursor_ptr(editor,start);
+    txteditConfigure(editor);
+    txteditSetCursorPtr(editor,start);
 
     // Restore the selected area to none
     editor->select_start = -1;
     editor->select_end = -1;
 
     Component *base = (Component *)editor;
-    set_stale_window(base->parent);
+    winSetStale(base->parent);
 }
 
 //select_text(Text_Editor *editor, int row, int col, bool new);
 //deselect_text(Text_Editor *editor);
 
-void update_editor_method(Component *base)
+// Text Edit Component Methods ------------------------------------------------
+local void txteditUpdateMethod(Component *base)
 {
     Text_Editor *editor = (Text_Editor *)base;
 
     // Clear the window
-    clear_window(base->window);
+    winClear(base->window);
 
     // Draw the text window
     for(int i = 0; i < editor->rows; i++)
-        wprint_window(base->window, i, 0, L"%ls", editor->line[i] + editor->left_visible);
+        winWprint(base->window, i, 0, L"%ls", editor->line[i] + editor->left_visible);
 
     // If this component has focus...
     if(base->parent->focus == base)
@@ -226,12 +229,12 @@ void update_editor_method(Component *base)
     }
 
     // Wrte the component window to the parent window of the component
-    write_window(base->parent,base->window);
+    winWrite(base->parent,base->window);
 
-    print_window(base->parent,base->parent->height-1, 2, "Row-%d/%d Col-%d/%d Line-%d Buffer-%d",editor->cursor_row,editor->rows,editor->cursor_col,editor->cols,line_length(editor,editor->cursor_row),wcslen(editor->buffer));
+    winPrint(base->parent,base->parent->height-1, 2, "Row-%d/%d Col-%d/%d Line-%d Buffer-%d",editor->cursor_row,editor->rows,editor->cursor_col,editor->cols,texteditLineLen(editor,editor->cursor_row),wcslen(editor->buffer));
 }
 
-int input_editor_method(Component *base, int ch)
+local int txteditInputMethod(Component *base, int ch)
 {
     Text_Editor *editor = (Text_Editor *)base;
 
@@ -239,37 +242,37 @@ int input_editor_method(Component *base, int ch)
     {
         case KEY_HOME:
             // Move the cursor to the first column and pan the window
-            set_cursor(editor,editor->cursor_row,0);
+            txteditSetCursor(editor,editor->cursor_row,0);
             break;
         case KEY_END:
             // Move the cursor to the end of the line
-            set_cursor(editor,editor->cursor_row,line_length(editor,editor->cursor_row));
+            txteditSetCursor(editor,editor->cursor_row,texteditLineLen(editor,editor->cursor_row));
             break;
         case KEY_LEFT:
             // If there is room the move left...
             if(editor->cursor_col > 0)
-                set_cursor(editor,editor->cursor_row,editor->cursor_col-1);
+                txteditSetCursor(editor,editor->cursor_row,editor->cursor_col-1);
             // Else if there is room to move up...
             else if(editor->cursor_row > 0)
-                set_cursor(editor,editor->cursor_row-1,line_length(editor,editor->cursor_row-1));
+                txteditSetCursor(editor,editor->cursor_row-1,texteditLineLen(editor,editor->cursor_row-1));
             break;
         case KEY_RIGHT:
             // If there is room to move right...
-            if(editor->cursor_col < line_length(editor,editor->cursor_row))
-                set_cursor(editor,editor->cursor_row,editor->cursor_col+1);
+            if(editor->cursor_col < texteditLineLen(editor,editor->cursor_row))
+                txteditSetCursor(editor,editor->cursor_row,editor->cursor_col+1);
             // Else if the is room to move down...
             else if(editor->cursor_row < editor->rows-1)
-                set_cursor(editor,editor->cursor_row+1,0);
+                txteditSetCursor(editor,editor->cursor_row+1,0);
             break;
         case KEY_UP:
             // If there is room to move up...
             if(editor->cursor_row > 0)
-                set_cursor(editor,editor->cursor_row-1,editor->cursor_col);
+                txteditSetCursor(editor,editor->cursor_row-1,editor->cursor_col);
             break;
         case KEY_DOWN:
             // If there is room to move down...
             if(editor->cursor_row < editor->rows-1)
-                set_cursor(editor,editor->cursor_row+1,editor->cursor_col);
+                txteditSetCursor(editor,editor->cursor_row+1,editor->cursor_col);
             break;
         case KEY_BACKSPACE:
             // If nothing is currently selected...
@@ -280,20 +283,20 @@ int input_editor_method(Component *base, int ch)
                 else
                     break;
             }
-            delete_text(editor);
+            txteditDeleteText(editor);
             break;
         case KEY_DC:
             // If nothing is currently selected...
             if(editor->select_start == -1 && editor->select_end == -1)
                 editor->select_start = editor->select_end = CURRENT_BUFFER_OFFSET(editor);
-            delete_text(editor);
+            txteditDeleteText(editor);
             break;
         case '\n':
         case KEY_ENTER:
             if(base->parent->insert_key)
-                insert_text(editor,L"\n");
+                txteditInsertText(editor,L"\n");
             else
-                replace_text(editor,L"\n");
+                txteditReplaceText(editor,L"\n");
             break;
         case KEY_ESC:
             break;
@@ -301,33 +304,33 @@ int input_editor_method(Component *base, int ch)
             // If this is a printable character...
             if(isprint(ch))
             {
-                wchar_t key_character[] = {char_to_wchar(ch), L'\0'};
+                wchar_t key_character[] = {charToWchar(ch), L'\0'};
                 // If insert is enabled...
                 if(base->parent->insert_key)
-                    insert_text(editor,key_character);
+                    txteditInsertText(editor,key_character);
                 // Else replace is enabled...
                 else
-                    replace_text(editor,key_character);
+                    txteditReplaceText(editor,key_character);
             }
             else
                 // Did not consume the input
                 return(0);
     }
     // Consumed the input
-    set_stale_window(base->parent);
+    winSetStale(base->parent);
     return(1);
 }
 
-void focus_editor_method(Component *base)
+local void txteditFocusMethod(Component *base)
 {
     Text_Editor *editor = (Text_Editor *)base;
     // Set the cursor for the component window
     base->window->cur_col = editor->cursor_col - editor->left_visible;
     base->window->cur_row = editor->cursor_row - editor->top_visible;
-    set_cursor_window(base->window,true);
+    winSetCursor(base->window,true);
 }
 
-void configure_editor_method(Component *base)
+local void texteditConfigureMethod(Component *base)
 {
     if(base == NULL)
         return;
@@ -375,14 +378,15 @@ void configure_editor_method(Component *base)
         editor->buffer[i-1] = L'\0';
 }
 
-void destroy_editor_method(Component *base)
+local void texteditDestroyMethod(Component *base)
 {
     Text_Editor *editor = (Text_Editor *)base;
     if(editor->line != NULL)
         free(editor->line);
 }
 
-Component *create_text_editor(Window *win, int row, int col, int height, int width, wchar_t *buffer, int buffer_size)
+// Text Edit Component User Functions -----------------------------------------
+Component *txteditCreate(Window *win, int row, int col, int height, int width, wchar_t *buffer, int buffer_size)
 {
     // Check input parameters
     if(row < 0 || col < 0 || height <= 0 || width <= 0 || buffer == NULL || buffer_size <= 0)
@@ -395,10 +399,10 @@ Component *create_text_editor(Window *win, int row, int col, int height, int wid
     Component *base = (Component *)editor;
 
     // Create the component
-    if((create_component(base, win, row, col, height, width, NULL)) == NULL)
+    if((compCreate(base, win, row, col, height, width, NULL)) == NULL)
         return(NULL);
     
-    Window *comp_window = allocate_window(row,col,height,width,NULL,false);
+    Window *comp_window = winAllocate(row,col,height,width,NULL,false);
     if(win == NULL)
             return(NULL);
                     
@@ -419,18 +423,18 @@ Component *create_text_editor(Window *win, int row, int col, int height, int wid
     editor->tab_width = 4;
 
     //base->destroy = destroy_editor_method;
-    base->configure = configure_editor_method;
-    base->update = update_editor_method;
-    base->input = input_editor_method;
-    base->focus = focus_editor_method;
-    base->notify_destroy = destroy_editor_method;
+    base->configure = texteditConfigureMethod;
+    base->update = txteditUpdateMethod;
+    base->input = txteditInputMethod;
+    base->focus = txteditFocusMethod;
+    base->notify_destroy = texteditDestroyMethod;
 
     // Configure the line array and other members according to the
     // contents of the buffer
-    configure_coponent(base);
+    compConfigure(base);
 
     // Set the focus to this new component
-    set_focus_window(win,base);
+    winSetFocus(win,base);
 
     return(base);
 }

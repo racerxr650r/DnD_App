@@ -24,7 +24,7 @@
 #include "lcaf.h"
 
 // Base Component *************************************************************
-void add_component(Window *win, Component *component)
+local void compAddMethod(Window *win, Component *component)
 {
     if(win == NULL || component == NULL)
         return;
@@ -42,7 +42,7 @@ void add_component(Window *win, Component *component)
     }
 }
 
-void remove_component(Window *win, Component *component)
+local void compRemoveMethod(Window *win, Component *component)
 {
     if(win == NULL || component == NULL || win->component_head == NULL || win->component_tail == NULL)
         return;
@@ -79,20 +79,21 @@ void remove_component(Window *win, Component *component)
     component->prev = NULL;    
 }
 
-void destroy_component_method(Component *component)
+local void compDestroyMethod(Component *component)
 {
     // Remove the component from the window
     component->remove(component->parent, component);
     
     if(component->window != NULL)
-        destroy_window(component->window);
+        if(component->window->destroy != NULL)
+            component->window->destroy(component->window);
 
-    notify_destroy_component(component);
+    compNotifyDestroy(component);
 
     free(component);
 }
 
-void read_only_component_method(Component *component)
+local void compReadOnlyMethod(Component *component)
 {
     if(component == NULL || component->parent == NULL)
         return;
@@ -101,7 +102,7 @@ void read_only_component_method(Component *component)
     component->focus = NULL;
 }
 
-void set_format_component_method(Component *component, const char *format)
+local void compSetFormatMethod(Component *component, const char *format)
 {
     if(component == NULL)
         return;
@@ -109,7 +110,7 @@ void set_format_component_method(Component *component, const char *format)
     component->format = format;
 }
 
-Component *create_component(Component *component, Window *win, int row, int col, int height, int width, const char *label)
+Component *compCreate(Component *component, Window *win, int row, int col, int height, int width, const char *label)
 {
     if(component == NULL || win == NULL)
         return(NULL);
@@ -134,12 +135,12 @@ Component *create_component(Component *component, Window *win, int row, int col,
     component->input = NULL;
     component->focus = NULL;
     
-    component->add = add_component;
-    component->remove = remove_component;
-    component->destroy = destroy_component_method;
+    component->add = compAddMethod;
+    component->remove = compRemoveMethod;
+    component->destroy = compDestroyMethod;
     
-    component->read_only = read_only_component_method;
-    component->set_format = set_format_component_method;
+    component->read_only = compReadOnlyMethod;
+    component->set_format = compSetFormatMethod;
 
     component->notify_action = NULL;
     component->notify_input = NULL;
@@ -156,7 +157,7 @@ Component *create_component(Component *component, Window *win, int row, int col,
 // List Component *************************************************************
 #define list_item_selected(list)    &list->items[list->selected*list->max_length]
 
-void update_list(Component *base)
+local void listUpdateMethod(Component *base)
 {
     List *list = (List *)base;
 
@@ -172,24 +173,24 @@ void update_list(Component *base)
     // Display the label
     int row = base->row;
     int col = base->col;
-    print_window(base->parent,row++,col,"%s---",base->label);
+    winPrint(base->parent,row++,col,"%s---",base->label);
 
     // Display the rows of items visible
     for(int i = list->top_visible; i < list->size && i < list->top_visible+base->height; i++)
-        print_window(base->parent,row++,col,"%.*s", base->width, &list->items[i*list->max_length]);
+        winPrint(base->parent,row++,col,"%.*s", base->width, &list->items[i*list->max_length]);
 
     // If this component has focus...
     if(base->parent->focus == base)
     {
         // Update the position of the cursor
         base->parent->cur_row = base->row + list->selected - list->top_visible + 1;
-        base->parent->cur_col = base->col+strlen(selected_item_list(list));
+        base->parent->cur_col = base->col+strlen(listSelectedItem(list));
     }
 }
 
-int list_action(Component *base, int ch)
+local int listAction(Component *base, int ch)
 {
-    List *list = (List *)base->prev;
+    List *list = (List *)base->context;
 
     // If the next selected item is at the end of the list and the list is not too big...
     if(++list->selected == list->size && list->size < list->max_items)
@@ -200,13 +201,13 @@ int list_action(Component *base, int ch)
     else if(list->size == list->max_items)
     {
         --list->selected;
-        display_error_popup(base->parent->screen, "Max List Items Reached",MESSAGE_DURATION);
+        popupError(base->parent->screen, "Max List Items Reached",MESSAGE_DURATION);
     }
-    destroy_window(base->parent);
+    winMarkDestroy(base->parent);
     return(1);
 }
 
-int input_list(Component *base, int ch)
+local int listInputMethod(Component *base, int ch)
 {
     List *list = (List *)base;
     Component *get_string;
@@ -223,34 +224,33 @@ int input_list(Component *base, int ch)
             break;
         case '\n':
         case '\r':
-            get_string = get_string_popup(base->parent->screen, "Enter Item: ", &list->items[list->selected*list->max_length], list->max_length, list_action);
+            get_string = popupGetString(base->parent->screen, "Enter Item: ", &list->items[list->selected*list->max_length], list->max_length, listAction);
             if(get_string == NULL)
                 return(-1);
-
             // Stash a pointer to this component context for the action handler
-            get_string->prev = base;
+            get_string->context = (void *)base;
             break;
         default:
             // Did not consume the input
             return(0);
     }
     // Consumed the input
-    set_stale_window(base->parent);
+    winSetStale(base->parent);
 
     return(1);
 }
 
-void focus_list(Component *base)
+local void listFocusMethod(Component *base)
 {
     List *list = (List *)base;
 
     //wmove(stdscr,base->row+list->selected-list->top_visible+1,base->col);
     base->parent->cur_row = base->row+list->selected-list->top_visible+1;
     base->parent->cur_col = base->col;
-    set_cursor_window(base->parent,true);
+    winSetCursor(base->parent,true);
 }
 
-Component *create_list(Window *win, int row, int col, int height, int width, char *label, char *items, int max_items, int max_length)
+Component *listCreate(Window *win, int row, int col, int height, int width, char *label, char *items, int max_items, int max_length)
 {
     // Check input parameters
     if(win == NULL || items == NULL || max_items <= 0 || max_length <= 0)
@@ -262,7 +262,7 @@ Component *create_list(Window *win, int row, int col, int height, int width, cha
         return(NULL);
 
     // Create the component
-    if((create_component((Component *)list, win, row, col, height, width, label)) == NULL)
+    if((compCreate((Component *)list, win, row, col, height, width, label)) == NULL)
         return(NULL);
     Component *base = (Component *)list;
     
@@ -278,26 +278,26 @@ Component *create_list(Window *win, int row, int col, int height, int width, cha
     while(list->items[i++ * list->max_length] != 0);
     list->size = i;
 
-    base->update = update_list;
-    base->input = input_list;
-    base->focus = focus_list;
+    base->update = listUpdateMethod;
+    base->input = listInputMethod;
+    base->focus = listFocusMethod;
 
     // Set the focus to this new component
-    set_focus_window(win,base);
+    winSetFocus(win,base);
 
     return((Component*)list);
 }
 
 // Checkbox Component *********************************************************
-void update_checkbox(Component *base)
+local void chkboxUpdateMethod(Component *base)
 {
     Checkbox *cb = (Checkbox *)base;
 
     if(cb->true_string != NULL && cb->false_string != NULL)
-        print_window(base->parent,base->row,base->col,base->format,base->label,*(cb->value)?cb->true_string:cb->false_string);
+        winPrint(base->parent,base->row,base->col,base->format,base->label,*(cb->value)?cb->true_string:cb->false_string);
 }
 
-int input_checkbox(Component *base, int ch)
+local int chkboxInputMethod(Component *base, int ch)
 {
     Checkbox *cb = (Checkbox *)base;
 
@@ -312,18 +312,18 @@ int input_checkbox(Component *base, int ch)
             return(0);
     }
     // Consumed the input
-    set_stale_window(base->parent);
+    winSetStale(base->parent);
     return(1);
 }
 
-void focus_checkbox(Component *base)
+local void chkboxFocusMethod(Component *base)
 {
     base->parent->cur_row = base->row;
     base->parent->cur_col = base->col+1;
-    set_cursor_window(base->parent,true);
+    winSetCursor(base->parent,true);
 }
 
-Component *create_checkbox(Window *win, int row, int col, int width, char *label, bool *value)
+Component *chkboxCreate(Window *win, int row, int col, int width, char *label, bool *value)
 {
     // Check input parameters
     if(value == NULL)
@@ -335,7 +335,7 @@ Component *create_checkbox(Window *win, int row, int col, int width, char *label
         return(NULL);
 
     // Create the component
-    if((create_component((Component *)checkbox, win, row, col, 1, width, label)) == NULL)
+    if((compCreate((Component *)checkbox, win, row, col, 1, width, label)) == NULL)
         return(NULL);
     Component *base = (Component *)checkbox;
 
@@ -344,23 +344,23 @@ Component *create_checkbox(Window *win, int row, int col, int width, char *label
     checkbox->false_string = " ";
     base->format = "%s[%s]";
 
-    base->update = update_checkbox;
-    base->input = input_checkbox;
-    base->focus = focus_checkbox;
+    base->update = chkboxUpdateMethod;
+    base->input = chkboxInputMethod;
+    base->focus = chkboxFocusMethod;
 
     // Set the focus to this new component
-    set_focus_window(win,base);
+    winSetFocus(win,base);
 
     return(base);
 }
 
 // String Component ***********************************************************
-void update_string(Component *base)
+local void strUpdateMethod(Component *base)
 {
     String *str = (String *)base;
 
     // Draw the label and field
-    print_window(base->parent,base->row,base->col,base->format,base->label,base->width,str->value);
+    winPrint(base->parent,base->row,base->col,base->format,base->label,base->width,str->value);
     // If this component has focus...
     if(base->parent->focus == base)
     {
@@ -370,7 +370,7 @@ void update_string(Component *base)
     }
 }
 
-int input_string(Component *base, int ch)
+local int strInputMethod(Component *base, int ch)
 {
     String *str = (String *)base;
 
@@ -405,8 +405,8 @@ int input_string(Component *base, int ch)
         case '\r':
         case KEY_ENTER:
         case KEY_ESC:
-            if(base->notify_action != NULL)
-                base->notify_action(base, ch);
+            compNotifyAction(base, ch);
+            base->parent->next_focus(base->parent);
             break;
         default:
             if(isprint(ch))
@@ -425,20 +425,20 @@ int input_string(Component *base, int ch)
             }
     }
     // Consumed the input
-    set_stale_window(base->parent);
+    winSetStale(base->parent);
     return(1);
 }
 
-void focus_string(Component *base)
+local void strFocusMethod(Component *base)
 {
     String *str = (String *)base;
     base->parent->cur_row = base->row;
     base->parent->cur_col = base->col+strlen(base->label)+str->cursor_offset;
     str->cursor_offset = strlen(str->value);
-    set_cursor_window(base->parent,true);
+    winSetCursor(base->parent,true);
 }
 
-Component *create_string(Window *win, int row, int col, int width, char *label, char *value, int size_max)
+Component *strCreate(Window *win, int row, int col, int width, char *label, char *value, int size_max)
 {
     // Check input parameters
     if(value == NULL || size_max <= 0)
@@ -451,7 +451,7 @@ Component *create_string(Window *win, int row, int col, int width, char *label, 
     Component *base = (Component *)string;
 
     // Create the component
-    if((create_component(base, win, row, col, 1, width, label)) == NULL)
+    if((compCreate(base, win, row, col, 1, width, label)) == NULL)
         return(NULL);
 
     string->value = value;
@@ -459,23 +459,23 @@ Component *create_string(Window *win, int row, int col, int width, char *label, 
     string->cursor_offset = strlen(value);
     base->format = "%s%.*s";
 
-    base->update = update_string;
-    base->input = input_string;
-    base->focus = focus_string;
+    base->update = strUpdateMethod;
+    base->input = strInputMethod;
+    base->focus = strFocusMethod;
 
     // Set the focus to this new component
-    set_focus_window(win,base);
+    winSetFocus(win,base);
     //base->focus(base);
 
     return(base);
 }
 
 // Integer Component **********************************************************
-void update_integer(Component *base)
+local void intUpdateMethod(Component *base)
 {
     Integer *integer = (Integer *)base;
 
-    print_window(base->parent,base->row,base->col,base->format,base->label,*(integer->value));
+    winPrint(base->parent,base->row,base->col,base->format,base->label,*(integer->value));
     // If this component has focus...
     if(base->parent->focus == base)
     {
@@ -485,7 +485,7 @@ void update_integer(Component *base)
     }
 }
 
-int input_integer(Component *base, int ch)
+local int intInputMethod(Component *base, int ch)
 {
     Integer *integer = (Integer *)base;
 
@@ -513,7 +513,6 @@ int input_integer(Component *base, int ch)
         case KEY_ENTER:
             if(base->notify_action)
                 base->notify_action(base, *integer->value);
-            
             base->parent->next_focus(base->parent);
             break;
         default:
@@ -522,11 +521,11 @@ int input_integer(Component *base, int ch)
     }
 
     // Consumed the input
-    set_stale_window(base->parent);
+    winSetStale(base->parent);
     return(1);
 }
 
-void focus_integer(Component *base)
+local void intFocusMethod(Component *base)
 {
     Integer *integer = (Integer *)base;
     // Update the cursor position
@@ -536,10 +535,10 @@ void focus_integer(Component *base)
     sprintf(integer->field,"%d",*integer->value);
     integer->cursor_offset = strlen(integer->field);
     // Enable the cursor
-    set_cursor_window(base->parent,true);
+    winSetCursor(base->parent,true);
 }
 
-Component *create_integer(Window *win, int row, int col, int width, char *label, int *value)
+Component *intCreate(Window *win, int row, int col, int width, char *label, int *value)
 {
     // Check input parameters
     if(row < 0 || col < 0 || width <= 0 || value == NULL)
@@ -552,33 +551,33 @@ Component *create_integer(Window *win, int row, int col, int width, char *label,
     Component *base = (Component *)integer;
 
     // Create the component
-    if((create_component(base, win, row, col, 1, width, label)) == NULL)
+    if((compCreate(base, win, row, col, 1, width, label)) == NULL)
         return(NULL);
 
     integer->value = value;
     integer->cursor_offset = snprintf(integer->field,sizeof(integer->field)-1,"%d",*integer->value);
     base->format = "%s%d";
 
-    base->update = update_integer;
-    base->input = input_integer;
-    base->focus = focus_integer;
+    base->update = intUpdateMethod;
+    base->input = intInputMethod;
+    base->focus = intFocusMethod;
 
     // Set the focus to this new component
-    set_focus_window(win,base);
+    winSetFocus(win,base);
 
     return(base);
 }
 
 // Text Component *************************************************************
-void update_text(Component *base)
+local void txtUpdateMethod(Component *base)
 {
     if(base == NULL)
         return;
 
-    print_window(base->parent,base->row,base->col,base->label,NULL);
+    winPrint(base->parent,base->row,base->col,base->label,NULL);
 }
 
-Component *create_text(Window *win, int row, int col, const char *text)
+Component *txtCreate(Window *win, int row, int col, const char *text)
 {
     // Check input parameters
     if(row < 0 || col < 0 || text == NULL)
@@ -590,22 +589,22 @@ Component *create_text(Window *win, int row, int col, const char *text)
         return(NULL);
 
     // Create the component
-    if((create_component(base, win, row, col, 1, strlen(text), text)) == NULL)
+    if((compCreate(base, win, row, col, 1, strlen(text), text)) == NULL)
         return(NULL);
 
-    base->update = update_text;
+    base->update = txtUpdateMethod;
     return(base);
 }
 
 // Timer Component ************************************************************
-void set_timer_method(Timer *timer, unsigned int msecs)
+local void tmrSetMethod(Timer *timer, unsigned int msecs)
 {
     if(timer == NULL)
         return;
     timer->counter = msecs;
 }
 
-void tick_timer_method(Component *base)
+local void tmrTickMethod(Component *base)
 {
     Timer *timer = (Timer *)base;
 
@@ -614,7 +613,7 @@ void tick_timer_method(Component *base)
             base->notify_action(base, 0); 
 }
 
-Component *create_timer(Window *win, unsigned int msecs)
+Component *tmrCreate(Window *win, unsigned int msecs)
 {
     if(win == NULL)
         return(NULL);
@@ -624,12 +623,12 @@ Component *create_timer(Window *win, unsigned int msecs)
         return(NULL);
 
     Component *base = (Component *)timer;
-    if((create_component(base, win, 0, 0, 0, 0, NULL)) == NULL)
+    if((compCreate(base, win, 0, 0, 0, 0, NULL)) == NULL)
         return(NULL);
 
-    base->notify_tick = tick_timer_method;
-    timer->set_timer = set_timer_method;
-    set_timer((Timer*)base,msecs);
+    base->notify_tick = tmrTickMethod;
+    timer->set_timer = tmrSetMethod;
+    tmrSet((Timer*)base,msecs);
 
     return(base);
 }
