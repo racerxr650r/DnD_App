@@ -422,7 +422,6 @@ Component *txteditCreate(Window *win, int row, int col, int height, int width, w
     editor->wrap = false;
     editor->tab_width = 4;
 
-    //base->destroy = destroy_editor_method;
     base->configure = texteditConfigureMethod;
     base->update = txteditUpdateMethod;
     base->input = txteditInputMethod;
