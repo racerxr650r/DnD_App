@@ -37,7 +37,9 @@ void get_string_input(int y, int x, const char *prompt, char *buffer, int max_le
 
 void dndLoadCharacter(Window *win);
 void dndSaveCharacter(Window *win);
+
 Spell **dndLoadSpells(const char *filename, int *spell_count);
+void dndFreeSpells(Spell **spells, int spell_count);
 
 int dndCreateWindows(Window *screen);
 int dndInput(Window *screen, int ch);
@@ -86,6 +88,8 @@ int main(int argc, char *argv[])
     }
     else
         ret = -1;
+
+    dndFreeSpells(spells, num_spells);
 
     return ret;
 }
@@ -766,4 +770,18 @@ Spell **dndLoadSpells(const char *filename, int *spell_count)
 
     fclose(file);
     return spells_array; // Return the number of spells loaded
+}
+
+void dndFreeSpells(Spell **spells, int spell_count)
+{
+    int i;
+    for (i = 0; i < spell_count; i++)
+    {
+        if (spells[i] != NULL)
+        {
+            free(spells[i]);
+            spells[i] = NULL;
+        }
+    }
+    free(spells);
 }

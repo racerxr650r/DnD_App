@@ -10,45 +10,35 @@
 # Build Variables +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # Project root directory (using shell pwd)
 PROJECT_ROOT := $(shell pwd)
-
 # Target executable name
 TARGET = DnD
-
 # Source files (full paths)
 SOURCES := $(wildcard $(PROJECT_ROOT)/*.c)
-
 # Object files (full paths)
 OBJECTS := $(patsubst $(PROJECT_ROOT)/%.c,$(PROJECT_ROOT)/build/%.o,$(SOURCES))
-
 # Dependency files (full paths)
 DEPENDS := $(OBJECTS:.o=.d)
-
 # Linux usr binaries directory
 BINDIR = /usr/local/bin
-
 # Linux manual directory for the man command
 MANDIR = /usr/local/man/man1
-
 # Build directory (full path)
 BUILD_DIR = $(PROJECT_ROOT)/build
-
 # Systemd services directory
 SYSDDIR = /etc/systemd/system
-
 # Udev rules directory
 UDEVDIR = /etc/udev/rules.d
+# Valgrind output file
+VALGRIND = valgrind_out.txt
 
 # C compiler command
 CC = gcc
-
 # Build flags for c files
-CFLAGS = -g -I/usr/local/include -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wredundant-decls -Wno-long-long -Wno-parentheses -DNCURSES_WIDECHAR=1 -MMD -MP
-
+CFLAGS = -g -I/usr/local/include -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wredundant-decls -Wno-long-long -Wno-parentheses -DNCURSES_WIDECHAR=1 -MMD -MP -fdata-sections -ffunction-sections
 # Debug flags for c files
 DFLAGS = -g3 -fsanitize=address -I/usr/local/include -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wredundant-decls -Wno-long-long -Wno-parentheses -DNCURSES_WIDECHAR=1 -MMD -MP
-
 # Linker Flags
-LDFLAGS = -lncursesw
+LDFLAGS = -Wl,--gc-sections -lncursesw
 
 # Application command line options
 OPTIONS =
@@ -93,8 +83,20 @@ uninstall:
 # Install prereqeuisites
 prereqs:
 	sudo apt update
-	sudo apt install libncurses5-dev libncursesw5-dev
+	sudo apt install libncurses5-dev libncursesw5-dev valgrind git
+	pushd .
+	cd ..
+	git clone https://github.com/racerxr650r/Valgrind_Parser
+	cd Valgrind_Parser
+	make install
+	cd ..
+	rm -rf Valgrind_Parser
+	popd
 
+# Run application w/Valgind memcheck
+valgrind: all
+	valgrind --leak-check=full --log-file=$(BUILD_DIR)/$(VALGRIND) --fullpath-after=string $(BUILD_DIR)/$(TARGET)
+	vgp $(BUILD_DIR)/$(VALGRIND)
 # Clean up all generated files
 clean:
 	rm -rf $(BUILD_DIR)

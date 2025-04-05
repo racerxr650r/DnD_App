@@ -26,20 +26,12 @@
 
 local int scrnInitializeMethod(Window *this)
 {
-    // Configure ncurses
-    raw();
-    cbreak();
-    noecho();
-    keypad(stdscr, TRUE);
-    start_color(); 
-    
-    return(0);
+    return(halInitialize());
 }
 
 local void scrnDestroyMethod(Window *this)
 {
-    // Turn off ncurses
-    endwin();
+    halShutDown();
 
     // Destroy all the child windows of this screen
     while(this->top_window)
@@ -79,43 +71,14 @@ local int scrnWriteMethod(Window *dest, Window *src)
         return(0);
 
     // Write the root window to the screen
-    int count = mvaddwstr(0,0,src->buffer);
+    int count = halWriteDisplay(src->buffer);
 
-    // Set the cursor type
-    switch (src->cursor_type)
-    {
-        case CURSOR_NONE:
-            curs_set(0); // Hide the cursor
-            break;
-        case CURSOR_INSERT:
-            curs_set(1); // Show the cursor
-            // Set to beem cursor
-            if (is_term_resized(LINES, COLS) == FALSE)
-            {
-                printf("\033[5 q"); // Set to beem cursor
-                fflush(stdout);
-            }
-            move(src->cur_row, src->cur_col);
-            break;
-        case CURSOR_OVERWRITE:
-            curs_set(1); // Show the cursor
-            // Set to block cursor
-            if (is_term_resized(LINES, COLS) == FALSE)
-            {
-                printf("\033[1 q"); // Set to block cursor
-                fflush(stdout);
-            }
-            move(src->cur_row, src->cur_col);
-            break;
-        default:
-            curs_set(0); // Hide the cursor
-            break;
-    }
-    // Set the cursor position
-    move(src->cur_row,src->cur_col);
+    if(halSetCursorType(src->cursor_type) > 0)
+        halSetCursorPosition(src->cur_row, src->cur_col);
 
     // Refresh the screen
-    refresh();
+    halRefreshDisplay();
+    
     // Mark the screen as fresh
     src->stale = false;
 
@@ -125,12 +88,11 @@ local int scrnWriteMethod(Window *dest, Window *src)
 Window *scrnCreate()
 {
     Window *screen = NULL;
+    int rows, cols;
 
-    // Initialize Ncurses
-    initscr();
-
+    halGetDisplaySize(&rows, &cols);
     // If allocating the screen buffer is successful...
-    if((screen = winAllocate(0, 0, LINES, COLS, NULL, false)) != NULL)
+    if((screen = winAllocate(0, 0, rows, cols, NULL, false)) != NULL)
     {
         screen->initialize = scrnInitializeMethod;
         screen->update = scrnUpdateMethod;
@@ -140,8 +102,6 @@ Window *scrnCreate()
         return(screen);
     }
 
-    // Failure
-    endwin();
     return(NULL);
 }
 
@@ -252,11 +212,9 @@ int scrnRun(Window *screen)
         scrnWrite(screen);
 
         // Get the next key
-        nodelay(stdscr,TRUE);
         int ch;
         while((ch = getch())==ERR)
             scrnTick(screen);
-        nodelay(stdscr,FALSE);
 
         // If the screen has been resized...
         if(ch == KEY_RESIZE)

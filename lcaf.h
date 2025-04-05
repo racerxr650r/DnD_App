@@ -18,7 +18,19 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN 
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR
  * IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- */ 
+ */
+
+ /* Building a library to remove dead code
+  * 
+  * Compile with the -fdata-sections -ffunction-sections options, that tell GCC
+  * to put data and functions in separate sections. Sections are just a concept
+  * in the object files, basically a stand-alone region. A single object file
+  * can contain many sections.
+  * 
+  * Then link with --gc-sections, telling the linker to garbage-collect unused
+  * sections. This will remove dead code.
+  */
+
 // Header Sentry
 #ifndef LCAF_H
 #define LCAF_H
@@ -26,7 +38,6 @@
 #define __STDC_WANT_LIB_EXT2__ 1  //Define you want TR 24731-2:2010 extensions
 
 #include <locale.h> // For setlocale
-#include <ncurses.h>
 #include <wchar.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -35,6 +46,8 @@
 #include <ctype.h>
 #include <wctype.h>
 #include <string.h>
+#include <stdbool.h>
+#include <ncurses.h>
 
 // Constants ******************************************************************
 #ifndef MESSAGE_DURATION
@@ -47,6 +60,18 @@
 
 #ifndef KEY_ESC
 #define KEY_ESC         27
+#endif
+
+#ifndef KEY_RESIZE
+#define KEY_RESIZE      0632
+#endif
+
+#ifndef ERR
+#define ERR             (-1)
+#endif
+
+#ifndef OK
+#define OK              (0)
 #endif
 
 // Macros *********************************************************************
@@ -1557,8 +1582,95 @@ Window *popupYesNo(Window *screen, const char *message, Input_Window yes_no_inpu
  */
 Component *popupGetString(Window *screen, char * label, char *value, int length, Input_Component handler);
 
-// CSV File Parsing ***********************************************************
+// Hardware Abstraction *******************************************************
+// Function Prototypes --------------------------------------------------------
+/**
+ * @brief Retrieves the size of the display.
+ * 
+ * This function retrieves the dimensions of the display in rows and columns.
+ *
+ * @param rows A pointer to an integer variable where the number of rows will be stored.
+ * @param cols A pointer to an integer variable where the number of columns will be stored.
+ * @return 0 on success, -1 on failure.
+ */
+int halGetDisplaySize(int *rows, int *cols);
 
+/**
+ * @brief Initializes the hardware abstraction layer (HAL).
+ * 
+ * This function initializes the HAL, which provides an interface to the
+ * underlying hardware for input and output.  It typically initializes the
+ * ncurses library.
+ *
+ * @return 0 on success, -1 on failure.
+ */
+int halInitialize(void);
+
+/**
+ * @brief Shuts down the hardware abstraction layer (HAL).
+ * 
+ * This function shuts down the HAL, releasing any resources it holds.
+ * It typically shuts down the ncurses library.
+ */
+void halShutDown(void);
+
+/**
+ * @brief Gets user input from the terminal.
+ * 
+ * This function reads a single character of input from the terminal.
+ *
+ * @return The character code of the input, or ERR on error.
+ */
+int halGetInput(void);
+
+/**
+ * @brief Shows or hides the cursor.
+ * 
+ * This function shows or hides the cursor on the terminal.
+ *
+ * @param enable A boolean value indicating whether to show (true) or hide (false) the cursor.
+ */
+void halShowCursor(bool enable);
+
+/**
+ * @brief Sets the cursor type.
+ * 
+ * This function sets the type of cursor to be displayed on the terminal.
+ *
+ * @param type The type of cursor to set (CURSOR_INSERT or CURSOR_OVERWRITE).
+ * @return A positive value if the cursor type was successfully set, 0 otherwise.
+ */
+int halSetCursorType(Cursor_Type type);
+
+/**
+ * @brief Sets the cursor position.
+ * 
+ * This function sets the position of the cursor on the terminal.
+ *
+ * @param row The row number (0-based) to set the cursor to.
+ * @param col The column number (0-based) to set the cursor to.
+ */
+void halSetCursorPosition(int row, int col);
+
+/**
+ * @brief Writes a buffer to the display.
+ * 
+ * This function writes the content of a wide-character buffer to the display.
+ *
+ * @param buffer A pointer to the wide-character buffer to write.
+ * @return The number of characters written, or 0 on error.
+ */
+int halWriteDisplay(wchar_t *buffer);
+
+/**
+ * @brief Refreshes the display.
+ * 
+ * This function refreshes the terminal display, ensuring that any changes made
+ * are visible to the user.
+ */
+void halRefreshDisplay(void);
+
+// CSV File Parsing ***********************************************************
 /**
  * @brief Removes leading and trailing whitespace characters from a string.
  * 
