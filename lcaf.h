@@ -36,6 +36,7 @@
 #define LCAF_H
 
 #define __STDC_WANT_LIB_EXT2__ 1  //Define you want TR 24731-2:2010 extensions
+#define _XOPEN_SOURCE_EXTENDED
 
 #include <locale.h> // For setlocale
 #include <wchar.h>
@@ -47,7 +48,7 @@
 #include <wctype.h>
 #include <string.h>
 #include <stdbool.h>
-#include <ncurses.h>
+#include <ncursesw/curses.h>
 
 // Constants ******************************************************************
 #ifndef MESSAGE_DURATION
@@ -74,13 +75,17 @@
 #define OK              (0)
 #endif
 
+#define COLOR_DEFAULT   1
+#define COLOR_FIELD     2
+#define COLOR_FOCUS     3
+
 // Macros *********************************************************************
 // Because static has too many meanings
 #define local           static
 #define persistant      static
 
-#define top_window      next
-#define bottom_window   prev
+//#define top_window      next
+//#define bottom_window   prev
 
 // Text Window ****************************************************************
 // Data/Function Types --------------------------------------------------------
@@ -181,6 +186,22 @@ typedef enum
 }Frame_Symbol;
 
 /**
+ * @brief Enumeration of frame label justifications.
+ *
+ * This enumeration defines the different justifications of the window label
+ * located in the top frame of the window.
+ */
+typedef enum
+{
+    /** @brief Left justified */
+    LABEL_LEFT = 0,
+    /** @brief Center justified */
+    LABEL_CENTER,
+    /** @brief Right justified */
+    LABEL_RIGHT
+}Label_Justification;
+
+/**
  * @brief Enumeration of cursor types.
  *
  * This enumeration defines the different types of cursors that can be used
@@ -207,8 +228,18 @@ typedef struct window_t
 {
     /** @brief A pointer to the window's content buffer (wide characters). */
     wchar_t *buffer;
+    /** @brief A pointer to the window's content attributes. */
+    attr_t *attrs;
+    /** @brief A pointer to the window's content colors. */
+    short *colors;
+    /** @brief The window's current character attributes. Any characters printed to the window will have these attributes. */
+    attr_t window_attr;
+    /** @brief The window's current character colors. Any characters printed to the window will have these colors. */
+    short window_color;
     /** @brief The window's label (null-terminated string). */
     char    *label;
+    /** @brief The window's label justification (left|center|right). */
+    Label_Justification label_justification;
     /** @brief The row position of the window on the screen. */
     int     row;
     /** @brief The column position of the window on the screen. */
@@ -245,6 +276,10 @@ typedef struct window_t
 
     /** @brief A pointer to the screen (root window) that this window belongs to. */
     struct window_t *screen;
+    /** @brief A pointer to the top sub-window. */
+    struct window_t *top_window;
+    /** @brief A pointer to the bottom sub-window. */
+    struct window_t *bottom_window;
     /** @brief A pointer to the previous window in the window list. */
     struct window_t *prev;
     /** @brief A pointer to the next window in the window list. */
@@ -1660,7 +1695,7 @@ void halSetCursorPosition(int row, int col);
  * @param buffer A pointer to the wide-character buffer to write.
  * @return The number of characters written, or 0 on error.
  */
-int halWriteDisplay(wchar_t *buffer);
+int halWriteDisplay(wchar_t *buffer, uint32_t *attrs, short *colors);
 
 /**
  * @brief Refreshes the display.

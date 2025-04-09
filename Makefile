@@ -83,15 +83,10 @@ uninstall:
 # Install prereqeuisites
 prereqs:
 	sudo apt update
-	sudo apt install libncurses5-dev libncursesw5-dev valgrind git
-	pushd .
-	cd ..
+	sudo apt install gcc libncurses5-dev libncursesw5-dev valgrind git
 	git clone https://github.com/racerxr650r/Valgrind_Parser
-	cd Valgrind_Parser
-	make install
-	cd ..
+	$(MAKE) -C ./Valgrind_Parser install
 	rm -rf Valgrind_Parser
-	popd
 
 # Run application w/Valgind memcheck
 valgrind: all

@@ -177,7 +177,15 @@ local void listUpdateMethod(Component *base)
 
     // Display the rows of items visible
     for(int i = list->top_visible; i < list->size && i < list->top_visible+base->height; i++)
-        winPrint(base->parent,row++,col,"%.*s", base->width, &list->items[i*list->max_length]);
+    {
+        short color = base->parent->window_color;
+        if(base->parent->focus == base && i == list->selected)
+            base->parent->window_color = COLOR_FOCUS;
+        else
+            base->parent->window_color = COLOR_FIELD;
+        winPrint(base->parent,row++,col,"%-*s", base->width, &list->items[i*list->max_length]);
+        base->parent->window_color = color;
+    }
 
     // If this component has focus...
     if(base->parent->focus == base)
@@ -247,7 +255,7 @@ local void listFocusMethod(Component *base)
     //wmove(stdscr,base->row+list->selected-list->top_visible+1,base->col);
     base->parent->cur_row = base->row+list->selected-list->top_visible+1;
     base->parent->cur_col = base->col;
-    winSetCursor(base->parent,true);
+    winSetCursor(base->parent,false);
 }
 
 Component *listCreate(Window *win, int row, int col, int height, int width, char *label, char *items, int max_items, int max_length)
@@ -358,9 +366,21 @@ Component *chkboxCreate(Window *win, int row, int col, int width, char *label, b
 local void strUpdateMethod(Component *base)
 {
     String *str = (String *)base;
+    short color;
 
-    // Draw the label and field
-    winPrint(base->parent,base->row,base->col,base->format,base->label,base->width,str->value);
+    // Print the label
+    winPrint(base->parent,base->row,base->col,"%s",base->label);
+    // Set up the color for the field
+    color = base->parent->window_color;
+    if(base->parent->focus == base)
+        base->parent->window_color = COLOR_FOCUS;
+    else
+        base->parent->window_color = COLOR_FIELD;
+    // Print the field
+    winPrint(base->parent,base->row,base->col + strlen(base->label),base->format,base->width,str->value);
+    // Restore the window color
+    base->parent->window_color = color;
+    
     // If this component has focus...
     if(base->parent->focus == base)
     {
@@ -457,7 +477,7 @@ Component *strCreate(Window *win, int row, int col, int width, char *label, char
     string->value = value;
     string->size_max = size_max;
     string->cursor_offset = strlen(value);
-    base->format = "%s%.*s";
+    base->format = "%-*s";
 
     base->update = strUpdateMethod;
     base->input = strInputMethod;
@@ -474,8 +494,23 @@ Component *strCreate(Window *win, int row, int col, int width, char *label, char
 local void intUpdateMethod(Component *base)
 {
     Integer *integer = (Integer *)base;
+    short color;
 
-    winPrint(base->parent,base->row,base->col,base->format,base->label,*(integer->value));
+    // Print the label
+    if(base->label != NULL)
+        winPrint(base->parent,base->row,base->col,"%s",base->label);
+    // Set up the color for the field
+    color = base->parent->window_color;
+    if(base->parent->focus == base && base->focus != NULL)
+        base->parent->window_color = COLOR_FOCUS;
+    else if (base->focus != NULL)
+        base->parent->window_color = COLOR_FIELD;
+    // Print the field
+    winPrint(base->parent,base->row,base->col + (base->label!=NULL?strlen(base->label):0),base->format,base->width,*(integer->value));
+    // Restore the window color
+    base->parent->window_color = color;
+ 
+//    winPrint(base->parent,base->row,base->col,base->format,base->label,*(integer->value));
     // If this component has focus...
     if(base->parent->focus == base)
     {
@@ -555,8 +590,8 @@ Component *intCreate(Window *win, int row, int col, int width, char *label, int 
         return(NULL);
 
     integer->value = value;
-    integer->cursor_offset = snprintf(integer->field,sizeof(integer->field)-1,"%d",*integer->value);
-    base->format = "%s%d";
+    integer->cursor_offset = snprintf(integer->field,sizeof(integer->field)-1,"%*d",width,*integer->value);
+    base->format = "%-*d";
 
     base->update = intUpdateMethod;
     base->input = intInputMethod;

@@ -39,6 +39,8 @@ local void scrnDestroyMethod(Window *this)
             this->top_window->destroy(this->top_window);
 
     // Free the screen data structure
+    free(this->attrs);
+    free(this->colors);
     free(this->buffer);
     free(this);
 }
@@ -46,7 +48,7 @@ local void scrnDestroyMethod(Window *this)
 local void scrnUpdateMethod(Window *this)
 {
     Window *win = this->bottom_window;
-    bool    stale = false;
+    bool    stale = this->stale;
 
     // If the screen has an update notification...
     if(this->notify_update)
@@ -71,7 +73,7 @@ local int scrnWriteMethod(Window *dest, Window *src)
         return(0);
 
     // Write the root window to the screen
-    int count = halWriteDisplay(src->buffer);
+    int count = halWriteDisplay(src->buffer,src->attrs,src->colors);
 
     if(halSetCursorType(src->cursor_type) > 0)
         halSetCursorPosition(src->cur_row, src->cur_col);
@@ -91,6 +93,7 @@ Window *scrnCreate()
     int rows, cols;
 
     halGetDisplaySize(&rows, &cols);
+
     // If allocating the screen buffer is successful...
     if((screen = winAllocate(0, 0, rows, cols, NULL, false)) != NULL)
     {
@@ -98,11 +101,24 @@ Window *scrnCreate()
         screen->update = scrnUpdateMethod;
         screen->write = scrnWriteMethod;
         screen->destroy = scrnDestroyMethod;
-
         return(screen);
     }
 
     return(NULL);
+}
+
+void scrnDestroyWindows(Window *screen)
+{
+    // Scan the windows and destroy the marked ones
+    Window *win = screen->bottom_window;
+    while(win != NULL)
+    {
+        Window *next = win->next;
+        if(win->mark_destroy)
+            if(win->destroy != NULL)
+                win->destroy(win);
+        win = next;
+    }
 }
 
 local void scrnTick(Window *screen)
@@ -128,6 +144,9 @@ local void scrnTick(Window *screen)
         }
         win = win->next;
     }
+
+    // Scan the windows and destroy the marked ones
+    scrnDestroyWindows(screen);
 
     // If notifying windows and components updated something...
     if(screen->stale)
@@ -171,20 +190,6 @@ local int scrnResize(Window *screen)
     return(winConfigure(screen));
 }
 
-void scrnDestroyWindows(Window *screen)
-{
-    // Scan the windows and destroy the marked ones
-    Window *win = screen->bottom_window;
-    while(win != NULL)
-    {
-        Window *next = win->next;
-        if(win->mark_destroy)
-            if(win->destroy != NULL)
-                win->destroy(win);
-        win = next;
-    }
-}
-
 int scrnRun(Window *screen)
 {
     if(screen == NULL)
@@ -201,11 +206,6 @@ int scrnRun(Window *screen)
         // Scan the windows and destroy the marked ones
         scrnDestroyWindows(screen);
         
-        Window *top = screen->top_window;
-        // If there is no top window to receive input...
-        if(top == NULL)
-            return(-1);
-
         // Update the screen
         scrnUpdate(screen);
         // Write the screen to hardware
@@ -215,6 +215,11 @@ int scrnRun(Window *screen)
         int ch;
         while((ch = getch())==ERR)
             scrnTick(screen);
+
+        Window *top = screen->top_window;
+        // If there is no top window to receive input...
+        if(top == NULL)
+            return(-1);
 
         // If the screen has been resized...
         if(ch == KEY_RESIZE)

@@ -80,7 +80,20 @@ local void winUpdateMethod(Window *this)
     if(this->label != NULL)
     {
         // Display the window label in the top middle
-        int offset = (this->width - strlen(this->label)) / 2;
+        int offset;
+        switch(this->label_justification)
+        {
+            case LABEL_LEFT:
+                offset = 2;
+                break;
+            case LABEL_CENTER:
+                offset = (this->width - strlen(this->label)) / 2;
+                break;
+            case LABEL_RIGHT:
+                offset = this->width - strlen(this->label) - 2;
+                break;
+        }
+        // Print the label in the top of the frame    
         winPrint(this, 0, offset, "%s", this->label);
         if(this->frame_type != FRAME_NONE)
         {
@@ -124,6 +137,8 @@ local int winWriteMethod(Window *win, Window *this)
         int source_pos = row * this->width;
         int dest_pos = ((row + this->row) * win->width) + this->col;
         memcpy(&win->buffer[dest_pos], &this->buffer[source_pos], max_col * sizeof(wchar_t));
+        memcpy(&win->attrs[dest_pos], &this->attrs[source_pos], max_col * sizeof(attr_t));
+        memcpy(&win->colors[dest_pos], &this->colors[source_pos], max_col * sizeof(short));
         copy_count += max_col;
     }
 
@@ -339,6 +354,10 @@ local void winDestroyMethod(Window *this)
 
     // Free the window buffer
     free(this->buffer);
+    // Free the window attributes
+    free(this->attrs);
+    // Free the window colors
+    free(this->colors);
     // Free the window data structure
     free(this);
 }
@@ -545,18 +564,26 @@ local int winPrintMethod(Window *this, int row, int col, const char *format, va_
 {
     if (this == NULL || format == NULL || this->buffer == NULL)
         return 0;
+    
+    va_list args2;
+    va_copy(args2, args);
 
-    char *formatted_string = NULL;
-    int formatted_string_size = 0;
+    // Allocate memory for the output string
+    int formatted_string_size = vsnprintf(NULL,0,format,args);
+    if(formatted_string_size <= 0)
+        return(0);
+    char *formatted_string = malloc((formatted_string_size + 1) * sizeof(char));
+    if(formatted_string == NULL)
+        return(0);
+
+    vsnprintf(formatted_string,formatted_string_size+1,format,args2);
+    va_end(args2);
 
     // Create a temporary formatted string
-    int result = vasprintf(&formatted_string, format, args);
-    if(result == -1 || formatted_string == NULL)
-    {
-        //va_end(args);
-        return(0);
-    }
-    formatted_string_size = result;
+    //int result = vasprintf(&formatted_string, format, args);
+    //if(result == -1 || formatted_string == NULL)
+    //    return(0);
+    //formatted_string_size = result;
 
     int total_written = 0;
     int current_row = row;
@@ -595,6 +622,8 @@ local int winPrintMethod(Window *this, int row, int col, const char *format, va_
 
             // Write one character to the buffer
             this->buffer[pos] = charToWchar(c);
+            this->attrs[pos] = this->window_attr;
+            this->colors[pos] = this->window_color;
             current_col++;
             total_written++;
         }
@@ -662,6 +691,8 @@ local int winWprintMethod(Window *this, int row, int col, const wchar_t *format,
 
             // Write one character to the buffer
             this->buffer[pos] = c;
+            this->attrs[pos] = this->window_attr;
+            this->colors[pos] = this->window_color;
             current_col++;
             total_written++;
         }
@@ -683,6 +714,8 @@ Window *winAllocate(int row, int col, int height, int width, char *label, bool b
         return(NULL);
 
     // Set window configuration
+    window->window_attr = WA_NORMAL;
+    window->window_color = COLOR_DEFAULT;
     window->row = row;
     window->col = col;
     window->height = height;
@@ -691,6 +724,7 @@ Window *winAllocate(int row, int col, int height, int width, char *label, bool b
     window->cur_col = 0;
     window->cursor_type = CURSOR_NONE;
     window->label = label;
+    window->label_justification = LABEL_CENTER;
     window->focus = NULL;
     window->insert_key = true;
     window->wrap = false;
@@ -731,6 +765,8 @@ Window *winAllocate(int row, int col, int height, int width, char *label, bool b
     window->notify_update = NULL;
     window->notify_destroy = NULL;
 
+    window->top_window = NULL;
+    window->bottom_window = NULL;
     window->next = NULL;
     window->prev = NULL;
     window->component_head = NULL;
@@ -745,8 +781,32 @@ Window *winAllocate(int row, int col, int height, int width, char *label, bool b
             free(window);
             return(NULL);
         }
-        memset(window->buffer, L' ', (height * width)*sizeof(wchar_t));
-        window->buffer[height * width] = L'\0';
+        
+        window->attrs = malloc((height * width)*sizeof(attr_t));
+        if(window->attrs == NULL)
+        {
+            free(window->buffer);
+            free(window);
+            return(NULL);
+        }
+
+        window->colors = malloc((height * width)*sizeof(short));
+        if(window->colors == NULL)
+        {
+            free(window->attrs);
+            free(window->buffer);
+            free(window);
+            return(NULL);
+        }
+
+        int i;
+        for(i=0;i<(height*width);++i)
+        {
+            window->buffer[i] = L' ';
+            window->attrs[i] = window->window_attr;
+            window->colors[i] = window->window_color;
+        }
+        window->buffer[i] = L'\0';
     }
     else
         window->buffer = NULL;

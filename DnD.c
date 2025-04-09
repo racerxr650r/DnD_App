@@ -62,7 +62,7 @@ int main(int argc, char *argv[])
     int num_spells = 0;
 
     setlocale(LC_ALL, "");
-    
+
     spells = dndLoadSpells("DnD_5e_Spells.csv", &num_spells);
 
     // Initialize character data structure
@@ -238,6 +238,7 @@ Window *dndCreateCharWin(Window *screen)
 {
     Window *win = winCreate(screen,0,0,screen->height,screen->width,"Character",true);
     win->frame_type = FRAME_HYBRID;
+    win->label_justification = LABEL_LEFT;
 
     // Display character information in sections
     Component  *this;
@@ -250,28 +251,28 @@ Window *dndCreateCharWin(Window *screen)
     strCreate(win,row++,2,20,"Alignment: ",character.alignment,MAX_TEXT_FIELD_LENGTH);
     row++;
     strCreate(win,row++,2,20,"Sex: ",character.sex,MAX_TEXT_FIELD_LENGTH);
-    intCreate(win,row++,2,20,"Age: ",&character.age);
+    intCreate(win,row++,2,4,"Age: ",&character.age);
     strCreate(win,row++,2,20,"Height: ",character.height,MAX_TEXT_FIELD_LENGTH);
-    intCreate(win,row++,2,20,"Weight: ",&character.weight);
-    intCreate(win,row++,2,20,"Speed: ",&character.speed);
+    intCreate(win,row++,2,3,"Weight: ",&character.weight);
+    intCreate(win,row++,2,3,"Speed: ",&character.speed);
     row++;
-    intCreate(win,row++,2,20,"XP: ",&character.xp);
-    this = intCreate(win,row++,2,20,"Proficiency: ",&character.proficiency_bonus);
+    intCreate(win,row++,2,6,"XP: ",&character.xp);
+    this = intCreate(win,row++,2,2,"Proficiency: ",&character.proficiency_bonus);
     compReadOnly(this);
-    compSetFormat(this,"%s%+d");
-    this = intCreate(win,row++,2,20,"Level: ",&character.level);
+    compSetFormat(this,"%+*d");
+    this = intCreate(win,row++,2,2,"Level: ",&character.level);
     compReadOnly(this);
 
     row++; // Add some spacing
-    intCreate(win,row++,2,20,"Armor Class: ",&character.armor_class);
-    this = intCreate(win,row++,2,20,"Initiative: ",&character.initiative);
-    compSetFormat(this,"%s%+d");
+    intCreate(win,row++,2,2,"Armor Class: ",&character.armor_class);
+    this = intCreate(win,row++,2,2,"Initiative: ",&character.initiative);
+    compSetFormat(this,"%+*d");
     compReadOnly(this);
     intCreate(win,row,2,3,"HP: ",&character.hp_current);
     intCreate(win,row,9,3,"\\",&character.hp_max);
     this = intCreate(win,row++,14,3,"Temp ",&character.hp_temp);
     compReadOnly(this);
-    compSetFormat(this,"%s(%d)");
+    compSetFormat(this,"(%*d)");
 
     // Calculate the right column
     int right_column_start = (win->width / 2); // Add spacing between columns
@@ -283,10 +284,10 @@ Window *dndCreateCharWin(Window *screen)
     this->notify_input = dndAbilityHandler;
     this = intCreate(win,row,right_column_start+7,2,NULL, &character.abilities.strength.modifier);
     compReadOnly(this);
-    compSetFormat(this,"%s (%+d)");
+    compSetFormat(this," (%+*d)");
     this = intCreate(win,row,right_column_start+12,1,NULL, &character.abilities.strength.save);
     compReadOnly(this);
-    compSetFormat(this,"%s (%+d)");
+    compSetFormat(this," (%+*d)");
     this = chkboxCreate(win,row++,right_column_start+21,1,NULL, &character.abilities.strength.proficient);
     compReadOnly(this);
     ((Checkbox *)this)->true_string = "P";
@@ -295,10 +296,10 @@ Window *dndCreateCharWin(Window *screen)
     this->notify_input = dndAbilityHandler;
     this = intCreate(win,row,right_column_start+7,2,NULL, &character.abilities.dexterity.modifier);
     compReadOnly(this);
-    compSetFormat(this,"%s (%+d)");
+    compSetFormat(this," (%+*d)");
     this = intCreate(win,row,right_column_start+12,1,NULL, &character.abilities.dexterity.save);
     compReadOnly(this);
-    compSetFormat(this,"%s (%+d)");
+    compSetFormat(this," (%+*d)");
     this = chkboxCreate(win,row++,right_column_start+21,1,NULL, &character.abilities.dexterity.proficient);
     compReadOnly(this);
     ((Checkbox *)this)->true_string = "P";
@@ -307,10 +308,10 @@ Window *dndCreateCharWin(Window *screen)
     this->notify_input = dndAbilityHandler;
     this = intCreate(win,row,right_column_start+7,2,NULL, &character.abilities.constitution.modifier);
     compReadOnly(this);
-    compSetFormat(this,"%s (%+d)");
+    compSetFormat(this," (%+*d)");
     this = intCreate(win,row,right_column_start+12,1,NULL, &character.abilities.constitution.save);
     compReadOnly(this);
-    compSetFormat(this,"%s (%+d)");
+    compSetFormat(this," (%+*d)");
     this = chkboxCreate(win,row++,right_column_start+21,1,NULL, &character.abilities.constitution.proficient);
     compReadOnly(this);
     ((Checkbox *)this)->true_string = "P";
@@ -319,10 +320,10 @@ Window *dndCreateCharWin(Window *screen)
     this->notify_input = dndAbilityHandler;
     this = intCreate(win,row,right_column_start+7,2,NULL, &character.abilities.intelligence.modifier);
     compReadOnly(this);
-    compSetFormat(this,"%s (%+d)");
+    compSetFormat(this," (%+*d)");
     this = intCreate(win,row,right_column_start+12,2,NULL, &character.abilities.intelligence.save);
     compReadOnly(this);
-    compSetFormat(this,"%s (%+d)");
+    compSetFormat(this," (%+*d)");
     this = chkboxCreate(win,row++,right_column_start+21,1,NULL, &character.abilities.intelligence.proficient);
     compReadOnly(this);
     ((Checkbox *)this)->true_string = "P";
@@ -331,10 +332,10 @@ Window *dndCreateCharWin(Window *screen)
     this->notify_input = dndAbilityHandler;
     this = intCreate(win,row,right_column_start+7,2,NULL, &character.abilities.wisdom.modifier);
     compReadOnly(this);
-    compSetFormat(this,"%s (%+d)");
+    compSetFormat(this," (%+*d)");
     this = intCreate(win,row,right_column_start+12,1,NULL, &character.abilities.wisdom.save);
     compReadOnly(this);
-    compSetFormat(this,"%s (%+d)");
+    compSetFormat(this," (%+*d)");
     this = chkboxCreate(win,row++,right_column_start+21,1,NULL, &character.abilities.wisdom.proficient);
     compReadOnly(this);
     ((Checkbox *)this)->true_string = "P";
@@ -343,10 +344,10 @@ Window *dndCreateCharWin(Window *screen)
     this->notify_input = dndAbilityHandler;
     this = intCreate(win,row,right_column_start+7,2,NULL, &character.abilities.charisma.modifier);
     compReadOnly(this);
-    compSetFormat(this,"%s (%+d)");
+    compSetFormat(this," (%+*d)");
     this = intCreate(win,row,right_column_start+12,1,NULL, &character.abilities.charisma.save);
     compReadOnly(this);
-    compSetFormat(this,"%s (%+d)");
+    compSetFormat(this," (%+*d)");
     this = chkboxCreate(win,row++,right_column_start+21,1,NULL, &character.abilities.charisma.proficient);
     compReadOnly(this);
     ((Checkbox *)this)->true_string = "P";

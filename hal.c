@@ -21,7 +21,7 @@
  * IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */ 
 #include "lcaf.h"
-#include <ncurses.h>
+#include <ncursesw/curses.h>
 #include <sys/ioctl.h>  // For ioctl()
 #include <termios.h>  // For struct winsize
 
@@ -48,13 +48,19 @@ int halInitialize(void)
 {
     // Initialize Ncurses
     initscr();
+
     // Configure ncurses
     raw();
     cbreak();
     noecho();
     keypad(stdscr, TRUE);
-    start_color();
     nodelay(stdscr,TRUE);
+    start_color();
+
+    //init_color(16,200,200,200);
+    init_pair(COLOR_DEFAULT, COLOR_WHITE, COLOR_BLACK);
+    init_pair(COLOR_FIELD, COLOR_WHITE, 234);
+    init_pair(COLOR_FOCUS, COLOR_BLACK, COLOR_WHITE);
 
     return(0);
 }
@@ -113,13 +119,32 @@ void halSetCursorPosition(int row, int col)
     move(row,col);
 }
 
-int halWriteDisplay(wchar_t *buffer)
+int halWriteDisplay(wchar_t *buffer, uint32_t *attrs, short *colors)
 {
+    int count;
+    cchar_t wch;
+    wchar_t character[] = {L'\0',L'\0'};
+    
     if(buffer == NULL)
         return(0);
 
+    move(0,0);
+
     // Write the root window to the screen
-    int count = mvaddwstr(0,0,buffer);
+    //int count = mvaddwstr(0,0,buffer);
+    for(count = 0; buffer[count] != L'\0'; count++)
+    {
+        //wch.chars[0] = buffer[count];
+        //wch.chars[1] = L'\0';
+        //wch.attr = attrs[count] | COLOR_PAIR(colors[count]);
+        //wch.ext_color = colors[count];
+
+        character[0] = buffer[count];
+        setcchar(&wch,character,attrs[count],colors[count],NULL);
+        // Apply the attribute to the window
+        //wattrset(stdscr, attrs[count]);
+        add_wch(&wch);
+    }
 
     return(count);
 }

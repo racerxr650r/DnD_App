@@ -26,6 +26,7 @@
 local int popupAction(Component *base, int ch)
 {
     winMarkDestroy(base->parent);
+    //winSetStale(base->parent->screen);
     return(0);
 }
 void popupError(Window *screen, const char *error_message, int milliseconds) 
