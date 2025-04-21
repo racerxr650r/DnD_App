@@ -43,9 +43,9 @@
 #define MAX_LANUAGES                10
 #define MAX_LANGUAGE_DESCRIPTION    40
 
-#define MAX_TEXT_FIELD_LENGTH 41
-#define MAX_SKILLS 18  // Number of skills
-
+#define MAX_TEXT_FIELD_LENGTH       41
+#define MAX_SKILLS                  18  // Number of skills
+#define MAX_DESCR_LENGTH            8192
 #define MAX_NOTES_LENGTH            65535
 
 // Keys
@@ -207,6 +207,9 @@ typedef struct
     int         age;
     char        height[MAX_TEXT_FIELD_LENGTH];
     int         weight;
+    char        hair[MAX_TEXT_FIELD_LENGTH];
+    char        eyes[MAX_TEXT_FIELD_LENGTH];
+    wchar_t     description[MAX_DESCR_LENGTH];
     int         level;
     int         xp;
     int         proficiency_bonus;

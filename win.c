@@ -111,6 +111,21 @@ local void winUpdateMethod(Window *this)
         component = component->next;
     }
 
+    // Update any sub-windows
+    Window *sub_win = this->bottom_window;
+    bool    stale = this->stale;
+    while(sub_win != NULL)
+    {
+        // If this window or a previous window is stale...
+        if(sub_win->stale || stale)
+        {
+            sub_win->update(sub_win);
+            sub_win->write(this,sub_win);
+            stale = true;
+        }
+        sub_win = sub_win->next;
+    }
+
     // If this window has an update notification...
     winNotifyUpdate(this);
 }

@@ -84,9 +84,6 @@
 #define local           static
 #define persistant      static
 
-//#define top_window      next
-//#define bottom_window   prev
-
 // Text Window ****************************************************************
 // Data/Function Types --------------------------------------------------------
 struct window_t;
@@ -351,6 +348,9 @@ typedef struct window_t
     /** @brief A function pointer to the window's destroy notification handler. */
     Notify_Window notify_destroy;
 }Window;
+
+// Constants ------------------------------------------------------------------
+extern wchar_t frame_symbols[8][10];
 
 // Function Prototypes/Inlines ------------------------------------------------
 /**
@@ -1346,7 +1346,7 @@ typedef struct integer_t
  */
 Component *intCreate(Window *win, int row, int col, int width, char *label, int *value);
 
-// List Component *************************************************************
+// Text Component *************************************************************
 // Function Prototypes/Inlines ------------------------------------------------
 /**
  * @brief Creates a new text component.
@@ -1408,7 +1408,35 @@ static inline void tmrSet(Timer *timer, unsigned int msecs)
     return;
 }
 
-// List Component *************************************************************
+// Frame Component ************************************************************
+// Data/Function Types --------------------------------------------------------
+typedef struct frame_t
+{
+    Component           base;
+    Window_Frame        frame_type;
+    Label_Justification label_justification;
+}Frame;
+
+// Function Prototypes/Inlines ------------------------------------------------
+Component *frameCreate(Window *win, int row, int col, int height, int width, const char *label);
+
+// Console Component **********************************************************
+// Data Types -----------------------------------------------------------------
+typedef struct 
+{
+    Component   base;
+    wchar_t     *prompt;
+    wchar_t     *command;
+    int         command_size;
+    wchar_t     **history;
+    int         history_depth;
+    int         history_max;
+    int         cursor_offser;
+}Console;
+
+// Function Prototypes/Inlines ------------------------------------------------
+
+// Text Edit Component ********************************************************
 // Data/Function Types --------------------------------------------------------
 typedef struct text_editor_t
 {

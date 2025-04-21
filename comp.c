@@ -667,3 +667,77 @@ Component *tmrCreate(Window *win, unsigned int msecs)
 
     return(base);
 }
+
+// Frame Component*************************************************************
+local void frameUpdateMethod(Component *base)
+{
+    if(base == NULL)
+        return;
+
+    Frame *frame = (Frame *)base;
+    Window *win = base->parent;
+    int row = base->row;
+    int col = base->col;
+
+    // Top of the frame
+    win->buffer[(row * win->width) + col++] = frame_symbols[frame->frame_type][TOP_LEFT];
+    for(; col < base->width-1+base->col; col++)
+        win->buffer[(row * win->width) + col] = frame_symbols[frame->frame_type][HORIZONTAL];
+    win->buffer[(row++ * win->width) + col] = frame_symbols[frame->frame_type][TOP_RIGHT];
+
+    // Sides of the frame
+    col = base->col;
+    for(; row < base->height-1+base->row; row++)
+    {
+        win->buffer[(row * (win->width)) + col] = frame_symbols[frame->frame_type][VERTICAL];
+        win->buffer[(row * (win->width)) + col + base->width - 1] = frame_symbols[frame->frame_type][VERTICAL];
+    }
+
+    // Bottom of the frame
+    win->buffer[(row*win->width)+col++] = frame_symbols[frame->frame_type][BOTTOM_LEFT];
+    for(; col < base->width-1+base->col; col++)
+        win->buffer[(row*win->width)+col] = frame_symbols[frame->frame_type][HORIZONTAL];
+    win->buffer[(row*win->width)+col] = frame_symbols[frame->frame_type][BOTTOM_RIGHT];
+
+    // Print label
+    int offset;
+    switch(frame->label_justification)
+    {
+        case LABEL_LEFT:
+            offset = base->col + 2;
+            break;
+        case LABEL_CENTER:
+            offset = ((win->width - strlen(base->label)) / 2) + base->col;
+            break;
+        case LABEL_RIGHT:
+            offset = win->width - strlen(base->label) - 2 + base->col;
+            break;
+    }
+    // Print the label in the top of the frame    
+    winPrint(win, base->row, offset, "%s", base->label);
+}
+
+Component *frameCreate(Window *win, int row, int col, int height, int width, const char *label)
+{
+    // Check input parameters
+    if(row < 0 || col < 0 || height < 2 || width < 2)
+        return(NULL);
+
+    // Allocate the integer
+    Component *base = malloc(sizeof(Component));
+    if(base == NULL)
+        return(NULL);
+
+    // Create the component
+    if((compCreate(base, win, row, col, height, width, label)) == NULL)
+        return(NULL);
+
+    Frame *frame = (Frame *)base;
+
+    frame->frame_type = FRAME_LIGHT_ARC;
+    frame->label_justification = LABEL_CENTER;
+    base->label = label;
+    base->update = frameUpdateMethod;
+    return(base);
+}
+

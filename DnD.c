@@ -236,11 +236,167 @@ int dndAbilityHandler(Component *component, int ch)
 
 Window *dndCreateCharWin(Window *screen)
 {
+    // Create window ----------------------------------------------------------
     Window *win = winCreate(screen,0,0,screen->height,screen->width,"Character",true);
+    if(win == NULL)
+        return(NULL);
     win->frame_type = FRAME_HYBRID;
-    win->label_justification = LABEL_LEFT;
 
-    // Display character information in sections
+    // Create frames within the window ----------------------------------------
+    Frame *frame = (Frame *)frameCreate(win,1,2,8,39,"Character");
+    if(frame==NULL)
+        return(NULL);
+    frame->label_justification = LABEL_LEFT;
+
+    frame = (Frame *)frameCreate(win,9,2,5,52,"Stats");
+    if(frame==NULL)
+        return(NULL);
+    frame->label_justification = LABEL_LEFT;
+
+    frame = (Frame *)frameCreate(win,14,2,9,52,"Description");
+    if(frame==NULL)
+        return(NULL);
+    frame->label_justification = LABEL_LEFT;
+
+    frame = (Frame *)frameCreate(win,1,42,8,36,"Abilities");
+    if(frame==NULL)
+        return(NULL);
+    frame->label_justification = LABEL_LEFT;
+
+    frame = (Frame *)frameCreate(win,9,55,9,23,"Combat Stats");
+    if(frame==NULL)
+        return(NULL);
+    frame->label_justification = LABEL_LEFT;
+
+    frame = (Frame *)frameCreate(win,18,55,5,23,"Languages");
+    if(frame==NULL)
+        return(NULL);
+    frame->label_justification = LABEL_LEFT;
+
+    // Character fields -------------------------------------------------------
+    int row = 2;
+    int col = 3;
+    Component *name = strCreate(win,row++,3,30," Name: ",character.name,MAX_TEXT_FIELD_LENGTH);
+    strCreate(win,row++,col,30,"Class: ",character.class,MAX_TEXT_FIELD_LENGTH);
+    strCreate(win,row++,col,30," Race: ",character.race,MAX_TEXT_FIELD_LENGTH);
+    strCreate(win,row++,col,30,"Bkgrd: ",character.background,MAX_TEXT_FIELD_LENGTH);
+    strCreate(win,row++,col,30,"Align: ",character.alignment,MAX_TEXT_FIELD_LENGTH);
+    strCreate(win,row++,col,30,"  Sex: ",character.sex,MAX_TEXT_FIELD_LENGTH);
+
+    // Stats fields -----------------------------------------------------------
+    row += 2;
+    intCreate(win,row,col,3,"   Age: ",&character.age);
+    intCreate(win,row,col+15,3,"Speed: ",&character.speed);
+    Component *this = intCreate(win,row++,col+33,2,"Level: ",&character.level);
+    compReadOnly(this);
+    strCreate(win,row,col,6,"Height: ",character.height,MAX_TEXT_FIELD_LENGTH);
+    strCreate(win,row,col+15,10," Hair: ",character.hair,MAX_TEXT_FIELD_LENGTH);
+    intCreate(win,row++,col+33,6,"   XP: ",&character.xp);
+    intCreate(win,row,col,3,"Weight: ",&character.weight);
+    strCreate(win,row,col+15,10," Eyes: ",character.eyes,MAX_TEXT_FIELD_LENGTH);
+    this = intCreate(win,row++,col+33,2," Prof: ",&character.proficiency_bonus);
+    compReadOnly(this);
+    compSetFormat(this,"%+*d");
+
+    // Description Text Edit --------------------------------------------------
+    row += 2;
+    //txteditCreate(win,row,3,7,50,character.description,MAX_DESCR_LENGTH);
+
+    // Abilities --------------------------------------------------------------
+    row = 1;
+    col = 45;
+    txtCreate(win,row,56,"Mod");
+    txtCreate(win,row,61,"Save");
+    txtCreate(win,row++,67,"Proficient");
+    // Strength
+    this = intCreate(win,row,col,2,"STR: ",&character.abilities.strength.score);
+    this->notify_input = dndAbilityHandler;
+    this = intCreate(win,row,col+10,2,NULL, &character.abilities.strength.modifier);
+    compReadOnly(this);
+    compSetFormat(this," (%+*d)");
+    this = intCreate(win,row,col+15,1,NULL, &character.abilities.strength.save);
+    compReadOnly(this);
+    compSetFormat(this," (%+*d)");
+    this = chkboxCreate(win,row++,col+25,1,NULL, &character.abilities.strength.proficient);
+    compReadOnly(this);
+    ((Checkbox *)this)->true_string = "X";
+
+    // Dexerity
+    this = intCreate(win,row,col,2,"DEX: ",&character.abilities.dexterity.score);
+    this->notify_input = dndAbilityHandler;
+    this = intCreate(win,row,col+10,2,NULL, &character.abilities.dexterity.modifier);
+    compReadOnly(this);
+    compSetFormat(this," (%+*d)");
+    this = intCreate(win,row,col+15,1,NULL, &character.abilities.dexterity.save);
+    compReadOnly(this);
+    compSetFormat(this," (%+*d)");
+    this = chkboxCreate(win,row++,col+25,1,NULL, &character.abilities.dexterity.proficient);
+    compReadOnly(this);
+    ((Checkbox *)this)->true_string = "X";
+
+    // Constitution
+    this = intCreate(win,row,col,2,"CON: ",&character.abilities.constitution.score);
+    this->notify_input = dndAbilityHandler;
+    this = intCreate(win,row,col+10,2,NULL, &character.abilities.constitution.modifier);
+    compReadOnly(this);
+    compSetFormat(this," (%+*d)");
+    this = intCreate(win,row,col+15,1,NULL, &character.abilities.constitution.save);
+    compReadOnly(this);
+    compSetFormat(this," (%+*d)");
+    this = chkboxCreate(win,row++,col+25,1,NULL, &character.abilities.constitution.proficient);
+    compReadOnly(this);
+    ((Checkbox *)this)->true_string = "X";
+ 
+    this = intCreate(win,row,col,2,"INT: ",&character.abilities.intelligence.score);
+    this->notify_input = dndAbilityHandler;
+    this = intCreate(win,row,col+10,2,NULL, &character.abilities.intelligence.modifier);
+    compReadOnly(this);
+    compSetFormat(this," (%+*d)");
+    this = intCreate(win,row,col+15,2,NULL, &character.abilities.intelligence.save);
+    compReadOnly(this);
+    compSetFormat(this," (%+*d)");
+    this = chkboxCreate(win,row++,col+25,1,NULL, &character.abilities.intelligence.proficient);
+    compReadOnly(this);
+    ((Checkbox *)this)->true_string = "X";
+
+    this = intCreate(win,row,col,2,"WIS: ",&character.abilities.wisdom.score);
+    this->notify_input = dndAbilityHandler;
+    this = intCreate(win,row,col+10,2,NULL, &character.abilities.wisdom.modifier);
+    compReadOnly(this);
+    compSetFormat(this," (%+*d)");
+    this = intCreate(win,row,col+15,1,NULL, &character.abilities.wisdom.save);
+    compReadOnly(this);
+    compSetFormat(this," (%+*d)");
+    this = chkboxCreate(win,row++,col+25,1,NULL, &character.abilities.wisdom.proficient);
+    compReadOnly(this);
+    ((Checkbox *)this)->true_string = "X";
+
+    this = intCreate(win,row,col,2,"CHA: ",&character.abilities.charisma.score);
+    this->notify_input = dndAbilityHandler;
+    this = intCreate(win,row,col+10,2,NULL, &character.abilities.charisma.modifier);
+    compReadOnly(this);
+    compSetFormat(this," (%+*d)");
+    this = intCreate(win,row,col+15,1,NULL, &character.abilities.charisma.save);
+    compReadOnly(this);
+    compSetFormat(this," (%+*d)");
+    this = chkboxCreate(win,row++,col+25,1,NULL, &character.abilities.charisma.proficient);
+    compReadOnly(this);
+    ((Checkbox *)this)->true_string = "X";
+
+    row = 10;
+    col = 59;
+    this = intCreate(win,row++,col,3," Initiative: ",&character.initiative);
+    compReadOnly(this);
+    intCreate(win,row++,col,3," Hit Points: ",&character.hp_current);
+    intCreate(win,row++,col,3,"        Max: ",&character.hp_max);
+    intCreate(win,row++,col,3,"        Tmp: ",&character.hp_temp);
+    intCreate(win,row++,col,2,"Armor Class: ",&character.armor_class);
+    intCreate(win,row++,col,2," W/O Shield: ",&character.armor_class);
+    intCreate(win,row++,col,2,"   No Armor: ",&character.armor_class);
+
+    listCreate(win,++row,col,3,20,NULL,(char *)character.languages,MAX_LANUAGES,MAX_LANGUAGE_DESCRIPTION);
+
+    /*// Display character information in sections
     Component  *this;
     int row = 1;
 
@@ -365,7 +521,7 @@ Window *dndCreateCharWin(Window *screen)
     compReadOnly(this);
 
     ++row; // Add some spacing
-    listCreate(win,row,right_column_start,3,20,"Languages ---",(char *)character.languages,MAX_LANUAGES,MAX_LANGUAGE_DESCRIPTION);
+    listCreate(win,row,right_column_start,3,20,"Languages ---",(char *)character.languages,MAX_LANUAGES,MAX_LANGUAGE_DESCRIPTION);*/
 
     winSetFocus(win, name);
 
