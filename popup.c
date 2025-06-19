@@ -36,11 +36,23 @@ void popupError(Window *screen, const char *error_message, int milliseconds)
     int start_y = (screen->height - height) / 2;
     int start_x = (screen->width - width) / 2;
 
-    Window *win = winCreate(screen, start_y, start_x, height, width, "Error", false);
-    win->frame_type = FRAME_LIGHT_ARC;
-    txtCreate(win,1,1,error_message);
-    Component *base = tmrCreate(win,milliseconds);
-    base->notify_action = popupAction;    
+    Window *win;
+    if(win = winCreate(screen, start_y, start_x, height, width, "Error", false))
+    {
+        win->frame_type = FRAME_LIGHT_ARC;
+        txtCreate(win,1,1,error_message);
+        Component *base;
+        if(base = tmrCreate(win,milliseconds))
+        {
+            base->notify_action = popupAction;
+            winMoveTop(win);
+        }
+        else
+        {
+            winMarkDestroy(win);
+            win = NULL;
+        }
+    }
 }
 
 // Pop Up Window User Functions -----------------------------------------------
@@ -51,11 +63,23 @@ void popupMessage(Window *screen, const char *message, int milliseconds)
     int start_y = (screen->height - height) / 2;
     int start_x = (screen->width - width) / 2;
 
-    Window *win = winCreate(screen, start_y, start_x, height, width, NULL, false);
-    win->frame_type = FRAME_LIGHT_ARC;
-    txtCreate(win,1,1,message);
-    Component *base = tmrCreate(win,milliseconds);
-    base->notify_action = popupAction;    
+    Window *win;
+    if(win = winCreate(screen, start_y, start_x, height, width, NULL, false))
+    {
+        win->frame_type = FRAME_LIGHT_ARC;
+        txtCreate(win,1,1,message);
+        Component *base;
+        if(base = tmrCreate(win,milliseconds))
+        {
+            base->notify_action = popupAction;
+            winMoveTop(win);
+        }
+        else
+        {
+            winMarkDestroy(win);
+            win = NULL;
+        }
+    }
 }
 
 Window *popupYesNo(Window *screen, const char *message, Input_Window yes_no_input)
@@ -71,7 +95,10 @@ Window *popupYesNo(Window *screen, const char *message, Input_Window yes_no_inpu
     {
         win->frame_type = FRAME_LIGHT_ARC;
         if(base = txtCreate(win,1,1,message))
+        {
             win->input = yes_no_input;
+            winMoveTop(win);
+        }
         else
         {
             winMarkDestroy(win);

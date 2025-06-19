@@ -27,7 +27,7 @@
 #define DEFAULT_PROMPT      "> "
 
 // Console Component Methods --------------------------------------------------
-local void txteditUpdateMethod(Component *base)
+local void consoleUpdateMethod(Component *base)
 {
     Text_Editor *editor = (Text_Editor *)base;
 
@@ -52,7 +52,7 @@ local void txteditUpdateMethod(Component *base)
     winPrint(base->parent,base->parent->height-1, 2, "Row-%d/%d Col-%d/%d Line-%d Buffer-%d",editor->cursor_row,editor->rows,editor->cursor_col,editor->cols,texteditLineLen(editor,editor->cursor_row),wcslen(editor->buffer));
 }
 
-local int txteditInputMethod(Component *base, int ch)
+local int consoleInputMethod(Component *base, int ch)
 {
     Text_Editor *editor = (Text_Editor *)base;
 
@@ -139,7 +139,7 @@ local int txteditInputMethod(Component *base, int ch)
     return(1);
 }
 
-local void txteditFocusMethod(Component *base)
+local void consoleFocusMethod(Component *base)
 {
     Text_Editor *editor = (Text_Editor *)base;
     // Set the cursor for the component window
@@ -148,7 +148,7 @@ local void txteditFocusMethod(Component *base)
     winSetCursor(base->window,true);
 }
 
-local void texteditConfigureMethod(Component *base)
+local void consoleConfigureMethod(Component *base)
 {
     if(base == NULL)
         return;
@@ -196,21 +196,23 @@ local void texteditConfigureMethod(Component *base)
         editor->buffer[i-1] = L'\0';
 }
 
-local void texteditDestroyMethod(Component *base)
+local void consoleDestroyMethod(Component *base)
 {
-    Text_Editor *editor = (Text_Editor *)base;
-    if(editor->line != NULL)
-        free(editor->line);
+    Console *console = (Console *)base;
+    if(base->window->destroy)
+        base->window->destroy(base->window);
+    free(console->buffer);
+    free(console);
 }
 
 // Text Edit Component User Functions -----------------------------------------
-Component *consoleCreate(Window *win, int row, int col, int height, int width, wchar_t *command, int command_size)
+Component *consoleCreate(Window *win, int row, int col, int height, int width, int buffer_lines, wchar_t *command, int command_size)
 {
     // Check input parameters
     if(row < 0 || col < 0 || height <= 0 || width <= 0 || command == NULL || command_size <= 0)
         return(NULL);
 
-    // Allocate the integer
+    // Allocate the console data structure
     Console *console = malloc(sizeof(Console));
     if(console == NULL)
         return(NULL);
@@ -218,24 +220,41 @@ Component *consoleCreate(Window *win, int row, int col, int height, int width, w
 
     // Create the component
     if((compCreate(base, win, row, col, height, width, NULL)) == NULL)
+    {
+        free(console);
         return(NULL);
+    }
     
+    // Allocate the window
     Window *comp_window = winAllocate(row,col,height,width,NULL,false);
     if(win == NULL)
+    {
+        free(console); 
         return(NULL);
+    }
+
+    // Allocate the buffer for the console
+    console->buffer = malloc((sizeof(wchar_t) * buffer_lines) + sizeof(wchar_t));
+    if(console->buffer == NULL)
+    {
+        if(base->window->destroy)
+            base->window->destroy(base->window);
+        free(console);
+        return(NULL);
+    }
                     
     base->window = comp_window;
     console->prompt = DEFAULT_PROMPT;
     console->command = command;
     console->command_size = command_size;
-    console->cursor_col = 0;
+    console->cursor_offset = 0;
     console->history_depth = DEFAULT_DEPTH;
 
-    base->configure = texteditConfigureMethod;
-    base->update = txteditUpdateMethod;
-    base->input = txteditInputMethod;
-    base->focus = txteditFocusMethod;
-    base->notify_destroy = texteditDestroyMethod;
+    base->configure = consoleConfigureMethod;
+    base->update = consoleUpdateMethod;
+    base->input = consoleInputMethod;
+    base->focus = consoleFocusMethod;
+    base->notify_destroy = consoleDestroyMethod;
 
     // Configure the line array and other members according to the
     // contents of the buffer

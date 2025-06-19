@@ -123,11 +123,38 @@ local void winUpdateMethod(Window *this)
             sub_win->write(this,sub_win);
             stale = true;
         }
-        sub_win = sub_win->next;
+        sub_win = sub_win->prev;
     }
 
     // If this window has an update notification...
     winNotifyUpdate(this);
+}
+
+int winCopy(Window *dest, Window *src)
+{
+    int copy_count = 0;
+    // Determine the copy areas
+    int min_row = 0;
+    int max_row = src->height;
+    if(max_row > dest->height - src->row)
+        max_row = dest->height - src->row;
+
+    int max_col = src->width;
+    if(max_col > dest->width - src->col)
+        max_col = dest->width - src->col;
+
+    // Write the content of src window into the destination window.
+    for(int row = min_row; row < max_row; row++)
+    {
+        int source_pos = row * src->width;
+        int dest_pos = ((row + src->row) * dest->width) + src->col;
+        memcpy(&dest->buffer[dest_pos], &src->buffer[source_pos], max_col * sizeof(wchar_t));
+        memcpy(&dest->attrs[dest_pos], &src->attrs[source_pos], max_col * sizeof(attr_t));
+        memcpy(&dest->colors[dest_pos], &src->colors[source_pos], max_col * sizeof(short));
+        copy_count += max_col;
+    }
+
+    return(copy_count);
 }
 
 local int winWriteMethod(Window *win, Window *this)
@@ -135,32 +162,16 @@ local int winWriteMethod(Window *win, Window *this)
     if (win == NULL || this == NULL || win->buffer == NULL || this->buffer == NULL)
         return 0;
 
-    int copy_count = 0;
-    // Determine the copy area
-    int min_row = 0;
-    int max_row = this->height;
-    if(max_row > win->height - this->row)
-        max_row = win->height - this->row;
+    int copy_count = winCopy(win,this);
 
-    int max_col = this->width;
-    if(max_col > win->width - this->col)
-        max_col = win->width - this->col;
-
-    // Write the content of this window into the destination window.
-    for(int row = min_row; row < max_row; row++)
+    // If this window has a component with focus...
+    if(this->focus || isScreen(this->parent))
     {
-        int source_pos = row * this->width;
-        int dest_pos = ((row + this->row) * win->width) + this->col;
-        memcpy(&win->buffer[dest_pos], &this->buffer[source_pos], max_col * sizeof(wchar_t));
-        memcpy(&win->attrs[dest_pos], &this->attrs[source_pos], max_col * sizeof(attr_t));
-        memcpy(&win->colors[dest_pos], &this->colors[source_pos], max_col * sizeof(short));
-        copy_count += max_col;
+        // Update the cursor state and location
+        win->cursor_type = this->cursor_type;
+        win->cur_row = this->cur_row + this->row;
+        win->cur_col = this->cur_col + this->col;    
     }
-
-    // Update the cursor state and location
-    win->cursor_type = this->cursor_type;
-    win->cur_row = this->cur_row + this->row;
-    win->cur_col = this->cur_col + this->col;    
 
     // Mark the source window fresh
     this->stale = false;
@@ -179,8 +190,26 @@ local int winInputMethod(Window *this, int ch)
 
     // The window's component with focus attempts to consume input
     Component *component = this->focus;
-    // If the window has a component with focus...
+    // If this window doesn't currently have a component with focus...
+    if(!component)
+    {
+        Window *win = this->top_window;
+        // Scan the sub-windows of a component with focus
+        while(win)
+        {
+            // If this sub-window handled the input...
+            if(win->focus)
+            {
+                component = win->focus;
+                break;
+            }
+            win = win->next;
+        }
+    }
+
+    // If a component with focus was found...
     if(component)
+    {
         // If the component has an input handler...
         if(component->input)
         {
@@ -194,6 +223,7 @@ local int winInputMethod(Window *this, int ch)
             if(result = component->input(component,ch))
                 return(result);
         }
+    }
 
     // If there is an input notification...
     if(this->notify_input)
@@ -209,11 +239,11 @@ local int winInputMethod(Window *this, int ch)
             this->cursor_type = this->insert_key ? CURSOR_INSERT : CURSOR_OVERWRITE;
             break;
         case KEY_BTAB:
-            this->prev_focus(this);
+            this->prev_focus(this,true);
             break;
         case '\t':
         case KEY_ENTER:
-            this->next_focus(this);
+            this->next_focus(this,true);
             break;
         default:
             // Did not consume the input
@@ -226,31 +256,31 @@ local int winInputMethod(Window *this, int ch)
     return(1);
 }
 
-local int winAddMethod(Window *screen, Window *this)
+local int winAddMethod(Window *parent, Window *this)
 {
-    if(this == NULL || screen == NULL)
+    if(this == NULL || parent == NULL)
         return(-1);
 
-    Window *tail = screen->top_window;
+    Window *last = parent->bottom_window;
 
     // If there is already a window in the list...
-    if(tail != NULL)
+    if(last != NULL)
     {
-        tail->next = this;
-        this->prev = tail;
+        last->next = this;
+        this->prev = last;
         this->next = NULL;
     }
     // Else this is the first window to be added
     else
     {
-        screen->bottom_window = this;
+        parent->top_window = this;
         this->next = NULL;
         this->prev = NULL;
     }
 
-    screen->top_window = this;
+    parent->bottom_window = this;
     winSetStale(this);
-    this->screen = screen;
+    this->parent = parent;
 
     if(this->notify_focus)
         this->notify_focus(this);
@@ -268,21 +298,21 @@ local void winInsertMethod(Window *ref, Window *this)
         ref->prev->next = this;
     // Else this is now the bottom window...
     else
-        ref->screen->bottom_window = this;
+        ref->parent->bottom_window = this;
 
     this->prev = ref->prev;
     this->next = ref;
     ref->prev = this;
-    this->screen = ref->screen;
+    this->parent = ref->parent;
     winSetStale(this);
 }
 
 local void winRemoveMethod(Window *this)
 {
-    if(this == NULL || this->screen == NULL)
+    if(this == NULL || this->parent == NULL)
         return;
 
-    Window *screen = this->screen;
+    Window *screen = this->parent;
 
     // If this is the bottom window...
     if(this == screen->bottom_window)
@@ -326,8 +356,8 @@ local void winSetStaleMethod(Window *this)
         return;
 
     // Mark the associated screen stale
-    if(this->screen)
-        this->screen->stale = true;
+    if(this->parent)
+        this->parent->stale = true;
 
     // Mark this window and all of them above it stale
     while(this)
@@ -360,9 +390,9 @@ local void winDestroyMethod(Window *this)
         compDestroy(curr_component);
     }
 
-    if(this->screen)
+    if(this->parent)
         // Mark all the windows as stale
-        winSetStale(this->screen->bottom_window);
+        winSetStale(this->parent->bottom_window);
 
     // Remove the window from the list
     this->remove(this);
@@ -386,37 +416,69 @@ local void winSetCursorMethod(Window *this, bool enable)
     winSetStale(this);
 }
 
-local void winSetFocusMethod(Window *this, Component *component)
+local App_Status winFirstFocusMethod(Window *this)
+{
+    if(this == NULL)
+        return(APP_INVALID_PARAMETER);
+
+    // If there are components for this window...
+    Component *comp = this->component_head;
+    while(comp)
+    {
+        if(winSetFocus(this,comp) == APP_OK)
+            return(APP_OK);
+        comp = comp->next;
+    }
+    // Else there are no components for this window...
+    Window *win = this->top_window;
+    // Iterate through the list of sub-windows from head to tail
+    while(win)
+    {
+        if(winFirstFocus(win) == APP_OK)
+            return(APP_OK);
+        win = win->next;
+    }
+    return(APP_NO_ACTION);
+}
+
+local App_Status winSetFocusMethod(Window *this, Component *component)
 {
     if(this == NULL || component == NULL || component->focus == NULL)
-        return;
+        return(APP_INVALID_PARAMETER);
+
+    // Check if this component is a valid member of this window...
+    Component *curr_comp = this->component_head;
+    while(curr_comp)
+    {
+        if(curr_comp == component)
+            goto VALID_COMPONENT;
+        curr_comp = curr_comp->next;
+    }
+    return(APP_NO_ACTION);
+
+    // Confirmed that the component is valid
+    VALID_COMPONENT:    
 
     // Set the window focus
     this->focus = component;
 
     // Set the component focus
-    if(component->focus)
-        component->focus(component);
-    if(component->notify_focus)
-        component->notify_focus(component);
+    compSetFocus(component);
+    compNotifyFocus(component);
 
     // Mark the window to be redrawn
     winSetStale(this);
+    return(APP_OK);
 }
 
-local void winNextFocusMethod(Window *this)
+local App_Status winNextFocusMethod(Window *this, bool top_window)
 {
     if(this == NULL)
-        return;
+        return(APP_INVALID_PARAMETER);
 
-    // If there are no components for this window...
-    if(this->component_head == NULL || this->component_tail == NULL)
-        return;
-
-    // Find the next valid component
-    Component *curr;
-    // If there is a current focus...
-    if(curr = this->focus)
+    // Does this window currently have the focus?
+    Component *curr = this->focus;
+    if(curr != NULL)
     {
         // While there is a next component in the list...
         while(curr = curr->next)
@@ -425,42 +487,75 @@ local void winNextFocusMethod(Window *this)
             if(curr->focus)
             {
                 winSetFocus(this,curr);
-                //this->focus = curr;
-                //curr->focus(curr);
-                //set_stale_window(this);
-                return;
+                return(APP_OK);
             }
         }
+        // Ran past the last component for this window
+        this->focus = NULL;
+        if(top_window)
+        {
+            Window *win = this->top_window;
+            // Iterate through the list of sub-windows from head to tail
+            while(win)
+            {
+                // If that window set the focus...
+                if(winFirstFocus(win) == APP_OK)
+                    return(APP_OK);
+                win = win->next;
+            }
+            // Ran past the last sub-window
+            return(winFirstFocus(this));
+        }
+        return(APP_OVERFLOW);
     }
 
-    curr = this->component_head;
-
-    // Iterate through the list of components from head to tail
-    do
+    // This window does not currently have the focus
+    Window *win = this->top_window;
+    // Does one of the sub-windows have focus?
+    // Iterate through the list of sub-windows from head to tail
+    while(win)
     {
-        // If component can handle focus...
-        if(curr->focus)
+        App_Status status = win->next_focus(win,false);
+        // If that window set the focus...
+        if(status == APP_OK)
+            return(APP_OK);
+        // Else if that window just overflowed the focus...
+        else if(status == APP_OVERFLOW)
         {
-            winSetFocus(this,curr);
-            //this->focus = curr;
-            //curr->focus(curr);
-            //set_stale_window(this);
-            return;
+            win = win->next;
+            // If there is another sub-window...
+            if(win)
+            {
+                // While there is another sub-window...
+                while(win)
+                {
+                    // If that sub-window set the focus...
+                    if(winFirstFocus(win) == APP_OK)
+                        return(APP_OK);
+                    win = win->next;
+                }
+            }
+            // Else that was the last of the sub-windows
+            // so set the first focus of this window
+            // If this is the top window setting next focus...
+            if(top_window)
+                return(winFirstFocus(this));
+            // Else return to a parent window setting next focus...
+            return(APP_OVERFLOW);
         }
-    }while(curr = curr->next);
-
-    // Else there are no valid components
-    this->focus = NULL;
+        win = win->next;
+    }
+    return(APP_NO_ACTION);
 }
 
-local void WinPrevFocusMethod(Window *this)
+local App_Status WinPrevFocusMethod(Window *this, bool top_window)
 {
     if(this == NULL)
-        return;
+        return(APP_INVALID_PARAMETER);
 
     // If there are no components for this window...
     if(this->component_head == NULL || this->component_tail == NULL)
-        return;
+        return(APP_INVALID_PARAMETER);
 
         // Find the previous valid component
     Component *curr;
@@ -477,7 +572,7 @@ local void WinPrevFocusMethod(Window *this)
                 //this->focus = curr;
                 //curr->focus(curr);
                 //set_stale_window(this);
-                return;
+                return(APP_OK);
             }
         }
     }
@@ -494,37 +589,38 @@ local void WinPrevFocusMethod(Window *this)
             //this->focus = curr;
             //curr->focus(curr);
             //set_stale_window(this);
-            return;
+            return(APP_OK);
         }
     }while(curr = curr->prev);
 
     // Else there are no valid components
     this->focus = NULL;
+    return(APP_NO_ACTION);
 }
 
 local void winMoveTopMethod(Window *this)
 {
-    if(this == NULL || this == this->screen->top_window)
+    if(this == NULL || this == this->parent->top_window)
         return;
 
     this->remove(this);
-    this->add(this->screen,this);
+    this->add(this->parent,this);
     winSetStale(this);
 }
 
 local void winMoveBottomMethod(Window *this)
 {
-    if(this == NULL || this == this->screen->bottom_window)
+    if(this == NULL || this == this->parent->bottom_window)
         return;
 
     this->remove(this);
-    this->insert(this->screen->bottom_window,this);
+    this->insert(this->parent->bottom_window,this);
     winSetStale(this);
 }
 
 local void winMoveUpMethod(Window *this)
 {
-    if(this == NULL || this == this->screen->top_window)
+    if(this == NULL || this == this->parent->top_window)
         return;
 
     this->remove(this);
@@ -533,14 +629,14 @@ local void winMoveUpMethod(Window *this)
         this->insert(this->next->next,this);
     // Else the next window is the top window...
     else
-        this->add(this->screen,this);
+        this->add(this->parent,this);
 
     winSetStale(this);
 }
 
 local void winMoveDownMethod(Window *this)
 {
-    if(this == NULL || this == this->screen->bottom_window)
+    if(this == NULL || this == this->parent->bottom_window)
         return;
 
     this->remove(this);
@@ -746,7 +842,7 @@ Window *winAllocate(int row, int col, int height, int width, char *label, bool b
     window->stale = true;
     window->mark_destroy = false;
     window->frame_type = FRAME_NONE;
-    window->screen = NULL;
+    window->parent = NULL;
 
     window->initialize = NULL;
     window->configure = NULL;
@@ -759,16 +855,23 @@ Window *winAllocate(int row, int col, int height, int width, char *label, bool b
     window->add = winAddMethod;
     window->insert = winInsertMethod;
     window->remove = winRemoveMethod;
+
     window->set_stale = winSetStaleMethod;
+
     window->set_cursor = winSetCursorMethod;
+
+    window->first_focus = winFirstFocusMethod;
     window->set_focus = winSetFocusMethod;
     window->next_focus = winNextFocusMethod;
     window->prev_focus = WinPrevFocusMethod;
+
     window->move_top = winMoveTopMethod;
     window->move_bottom = winMoveBottomMethod;
     window->move_up = winMoveUpMethod;
     window->move_down = winMoveDownMethod;
+
     window->clear_window = winClearMethod;
+
     window->print = winPrintMethod;
     window->wprint = winWprintMethod;
     

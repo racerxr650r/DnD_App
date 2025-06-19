@@ -63,7 +63,7 @@ local void scrnUpdateMethod(Window *this)
             win->write(this,win);
             stale = true;
         }
-        win = win->next;
+        win = win->prev;
     }
 }
 

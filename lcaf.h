@@ -86,40 +86,15 @@
 
 // Text Window ****************************************************************
 // Data/Function Types --------------------------------------------------------
-struct window_t;
-struct component_t;
-
-typedef int (*Initialize_Window)(struct window_t *win);
-typedef int (*Configure_Window)(struct window_t *win);
-typedef void (*Set_Cursor_Window)(struct window_t *win, bool enable);
-typedef void (*Frame_Window)(struct window_t *win);
-typedef void (*Update_Window)(struct window_t *win);
-typedef int  (*Input_Window)(struct window_t *win, int input);
-typedef void (*Destroy_Window)(struct window_t *win);
-typedef int (*Add_Window)(struct window_t *screen, struct window_t *win);
-typedef void (*Insert_Window)(struct window_t *ref, struct window_t *win);
-typedef void (*Remove_Window)(struct window_t *win);
-typedef void (*Stale_Window)(struct window_t *win);
-typedef void (*Set_Focus_Window)(struct window_t *win, struct component_t *component);
-typedef void (*Next_Focus_Window)(struct window_t *win);
-typedef void (*Prev_Focus_Window)(struct window_t *win);
-typedef void (*Move_Top_Window)(struct window_t *win);
-typedef void (*Move_Bottom_Window)(struct window_t *win);
-typedef void (*Move_Up_Window)(struct window_t *win);
-typedef void (*Move_Down_Window)(struct window_t *win);
-typedef void (*Clear_Window)(struct window_t *win);
-typedef int (*Print_Window)(struct window_t *win, int row, int col, const char *format, va_list args);
-typedef int (*Wprint_Window)(struct window_t *win, int row, int col, const wchar_t *format, va_list args);
-typedef int (*Write_Window)(struct window_t *win, struct window_t *this);
-typedef void (*Notify_Window)(struct window_t *win);
-
 typedef enum
 {
+    APP_OVERFLOW = -5,
     APP_UNABLE_TO_CREATE_WINDOW = -4,
     APP_UNABLE_TO_CREATE_COMPONENT = -3,
     APP_MEMORY_ALLOC_FAIL = -2,
     APP_INVALID_PARAMETER = -1,
-    APP_OK = 0
+    APP_NO_ACTION = 0,
+    APP_OK = 1
 }App_Status;
 
 /**
@@ -214,6 +189,34 @@ typedef enum
     CURSOR_OVERWRITE
 }Cursor_Type;
 
+struct window_t;
+struct component_t;
+
+typedef int (*Initialize_Window)(struct window_t *win);
+typedef int (*Configure_Window)(struct window_t *win);
+typedef void (*Set_Cursor_Window)(struct window_t *win, bool enable);
+typedef void (*Frame_Window)(struct window_t *win);
+typedef void (*Update_Window)(struct window_t *win);
+typedef int  (*Input_Window)(struct window_t *win, int input);
+typedef void (*Destroy_Window)(struct window_t *win);
+typedef int (*Add_Window)(struct window_t *screen, struct window_t *win);
+typedef void (*Insert_Window)(struct window_t *ref, struct window_t *win);
+typedef void (*Remove_Window)(struct window_t *win);
+typedef void (*Stale_Window)(struct window_t *win);
+typedef App_Status (*First_Focus_Window)(struct window_t *win);
+typedef App_Status (*Set_Focus_Window)(struct window_t *win, struct component_t *component);
+typedef App_Status (*Next_Focus_Window)(struct window_t *win, bool top_window);
+typedef App_Status (*Prev_Focus_Window)(struct window_t *win, bool top_window);
+typedef void (*Move_Top_Window)(struct window_t *win);
+typedef void (*Move_Bottom_Window)(struct window_t *win);
+typedef void (*Move_Up_Window)(struct window_t *win);
+typedef void (*Move_Down_Window)(struct window_t *win);
+typedef void (*Clear_Window)(struct window_t *win);
+typedef int (*Print_Window)(struct window_t *win, int row, int col, const char *format, va_list args);
+typedef int (*Wprint_Window)(struct window_t *win, int row, int col, const wchar_t *format, va_list args);
+typedef int (*Write_Window)(struct window_t *win, struct window_t *this);
+typedef void (*Notify_Window)(struct window_t *win);
+
 /**
  * @brief Represents a text window.
  *
@@ -226,13 +229,13 @@ typedef struct window_t
     /** @brief A pointer to the window's content buffer (wide characters). */
     wchar_t *buffer;
     /** @brief A pointer to the window's content attributes. */
-    attr_t *attrs;
+    attr_t  *attrs;
     /** @brief A pointer to the window's content colors. */
-    short *colors;
+    short   *colors;
     /** @brief The window's current character attributes. Any characters printed to the window will have these attributes. */
-    attr_t window_attr;
+    attr_t  window_attr;
     /** @brief The window's current character colors. Any characters printed to the window will have these colors. */
-    short window_color;
+    short   window_color;
     /** @brief The window's label (null-terminated string). */
     char    *label;
     /** @brief The window's label justification (left|center|right). */
@@ -264,6 +267,8 @@ typedef struct window_t
     /** @brief The type of frame to draw around the window. */
     Window_Frame    frame_type;
 
+    /** @brief A pointer to the sub window with focus */
+    struct window_t *focus_window;
     /** @brief A pointer to the first component in the window's component list. */
     struct component_t *component_head;
     /** @brief A pointer to the last component in the window's component list. */
@@ -271,8 +276,8 @@ typedef struct window_t
     /** @brief A pointer to the component that currently has focus. */
     struct component_t *focus;
 
-    /** @brief A pointer to the screen (root window) that this window belongs to. */
-    struct window_t *screen;
+    /** @brief A pointer to the parent window that this window belongs to. */
+    struct window_t *parent;
     /** @brief A pointer to the top sub-window. */
     struct window_t *top_window;
     /** @brief A pointer to the bottom sub-window. */
@@ -308,14 +313,18 @@ typedef struct window_t
     /** @brief A function pointer to the window's stale marking method. */
     Stale_Window        set_stale;
 
-    /** @brief A function pointer to the window's focus setting method. */
-    Set_Focus_Window    set_focus;
     /** @brief A function pointer to the window's cursor setting method. */
     Set_Cursor_Window   set_cursor;
+
+    /** @brief A function pointer to the window's previous focus method. */
+    First_Focus_Window  first_focus;
+    /** @brief A function pointer to the window's focus setting method. */
+    Set_Focus_Window    set_focus;
     /** @brief A function pointer to the window's next focus method. */
     Next_Focus_Window   next_focus;
     /** @brief A function pointer to the window's previous focus method. */
     Prev_Focus_Window   prev_focus;
+
     /** @brief A function pointer to the window's move to top method. */
     Move_Top_Window     move_top;
     /** @brief A function pointer to the window's move to bottom method. */
@@ -403,6 +412,26 @@ Window *winCreate(Window *screen, int row, int col, int height, int width, char 
 wchar_t charToWchar(char c);
 
 /**
+ * @brief Copies the content of one window into another.
+ * 
+ * This function copies the buffer one window into another window. The row and
+ * column of the source window is relative the destination window.
+ */
+int winCopy(Window *src, Window *dst);
+
+/**
+ * @brief Returns true if the window is a top level "screen"
+ * 
+ * This function returns true if the window does not have a parent. This
+ * indicates that the window is a "screen". If the window does have a parent
+ * the function returns false.
+ */
+static inline bool isScreen(Window *this)
+{
+    return(this->parent?false:true);
+}
+
+/**
  * @brief Initializes a window.
  *
  * This inline function calls the window's initialize method if it exists.
@@ -443,7 +472,7 @@ static inline int winInput(Window *this, int ch)
 {
     if(this != NULL)
         if(this->input != NULL)
-            return(this->configure(this));
+            return(this->input(this,ch));
     return(0);
 }
 
@@ -511,23 +540,6 @@ static inline void winRemove(Window *win)
 }
 
 /**
- * @brief Sets the focus to a component within a window.
- *
- * This inline function calls the window's set_focus method to set the focus to a
- * specific component.
- *
- * @param this A pointer to the window.
- * @param component A pointer to the component to receive focus.
- */
-static inline void winSetFocus(Window *this, struct component_t *component)
-{
-    if(this != NULL)
-        if(this->set_focus != NULL)
-            this->set_focus(this, component);
-    return;
-}
-
-/**
  * @brief Enables or disables the cursor for a window.
  *
  * This inline function calls the window's set_cursor method to enable or disable
@@ -561,6 +573,39 @@ static inline void winSetStale(Window *this)
 }
 
 /**
+ * @brief Sets the focus to the first component within a window.
+ *
+ * This inline function calls the window's set_focus method to set the focus to a
+ * specific component.
+ *
+ * @param this A pointer to the window.
+ */
+static inline App_Status winFirstFocus(Window *this)
+{
+    if(this != NULL)
+        if(this->first_focus != NULL)
+            return(this->first_focus(this));
+    return(APP_NO_ACTION);
+}
+
+/**
+ * @brief Sets the focus to a component within a window.
+ *
+ * This inline function calls the window's set_focus method to set the focus to a
+ * specific component.
+ *
+ * @param this A pointer to the window.
+ * @param component A pointer to the component to receive focus.
+ */
+static inline App_Status winSetFocus(Window *this, struct component_t *component)
+{
+    if(this != NULL)
+        if(this->set_focus != NULL)
+            return(this->set_focus(this, component));
+    return(APP_NO_ACTION);
+}
+
+/**
  * @brief Moves the focus to the next component in a window.
  *
  * This inline function calls the window's next_focus method to move the focus to
@@ -568,12 +613,13 @@ static inline void winSetStale(Window *this)
  *
  * @param this A pointer to the window.
  */
-static inline void winNextFocus(Window *this)
+static inline App_Status winNextFocus(Window *this)
 {
-    if(this != NULL)
-        if(this->next_focus != NULL)
-            this->next_focus(this);
-    return;
+    if(this == NULL)
+        return(APP_INVALID_PARAMETER);
+    if(this->next_focus != NULL)
+        return(this->next_focus(this,true));
+    return(APP_NO_ACTION);
 }
 
 /**
@@ -584,12 +630,12 @@ static inline void winNextFocus(Window *this)
  *
  * @param this A pointer to the window.
  */
-static inline void winPrevFocus(Window *this)
+static inline App_Status winPrevFocus(Window *this)
 {
     if(this != NULL)
         if(this->prev_focus != NULL)
-            this->prev_focus(this);
-    return;
+            return(this->prev_focus(this,true));
+    return(APP_NO_ACTION);
 }
 
 /**
@@ -1139,6 +1185,22 @@ static inline void compConfigure(Component *this)
 }
 
 /**
+ * @brief Sets a component as the current focus.
+ * 
+ * This function calls the component's `focus` method, if it exists, to
+ * perform any necessary action when the component gets the focus.
+ *
+ * @param this A pointer to the component to configure.
+ */
+static inline void compSetFocus(Component *this)
+{
+    if(this != NULL)
+        if(this->focus != NULL)
+            this->focus(this);
+    return;
+}
+
+/**
  * @brief Destroys a component.
  * 
  * This function calls the component's `destroy` method, if it exists, to
@@ -1169,6 +1231,23 @@ static inline void compNotifyAction(Component *this, int ch)
     if(this != NULL)
         if(this->notify_action != NULL)
             this->notify_action(this, ch);
+    return;
+}
+
+/**
+ * @brief Notifies a component set focus event.
+ * 
+ * This function calls the component's `notify_action` method, if it exists, to
+ * inform the component of an action event. An action event is typically
+ * triggered by a user action, such as pressing a key or selecting an option.
+ *
+ * @param this A pointer to the component to notify.
+ */
+static inline void compNotifyFocus(Component *this)
+{
+    if(this != NULL)
+        if(this->notify_focus != NULL)
+            this->notify_focus(this);
     return;
 }
 
@@ -1427,14 +1506,25 @@ typedef struct
     Component   base;
     wchar_t     *prompt;
     wchar_t     *command;
+    wchar_t     *buffer;
+    int         buffer_rows;
     int         command_size;
     wchar_t     **history;
     int         history_depth;
     int         history_max;
-    int         cursor_offser;
+    int         cursor_offset;
 }Console;
 
 // Function Prototypes/Inlines ------------------------------------------------
+Component *consoleCreate(Window *win, int row, int col, int height, int width, int buffer_lines, wchar_t *command, int command_size);
+
+static inline void destroyConsole(Console *console)
+{
+    if(console != NULL)
+        if(console->base.destroy != NULL)
+            console->base.destroy(&console->base);
+    return;
+}
 
 // Text Edit Component ********************************************************
 // Data/Function Types --------------------------------------------------------

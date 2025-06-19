@@ -50,7 +50,7 @@ local void compRemoveMethod(Window *win, Component *component)
     // If this component has the focus...
     if(component->parent->focus == component)
         // Decrement the focus to the previous valid component
-        component->parent->prev_focus(component->parent);
+        component->parent->prev_focus(component->parent, true);
 
     // If the component is at the head of the list...
     if(win->component_head == component)
@@ -98,7 +98,10 @@ local void compReadOnlyMethod(Component *component)
     if(component == NULL || component->parent == NULL)
         return;
 
-    component->parent->prev_focus(component->parent);
+    //component->parent->prev_focus(component->parent,true);
+    if(component->parent->focus == component)
+        winNextFocus(component->parent);
+
     component->focus = NULL;
 }
 
@@ -209,7 +212,7 @@ local int listAction(Component *base, int ch)
     else if(list->size == list->max_items)
     {
         --list->selected;
-        popupError(base->parent->screen, "Max List Items Reached",MESSAGE_DURATION);
+        popupError(base->parent->parent, "Max List Items Reached",MESSAGE_DURATION);
     }
     winMarkDestroy(base->parent);
     return(1);
@@ -232,7 +235,7 @@ local int listInputMethod(Component *base, int ch)
             break;
         case '\n':
         case '\r':
-            get_string = popupGetString(base->parent->screen, "Enter Item: ", &list->items[list->selected*list->max_length], list->max_length, listAction);
+            get_string = popupGetString(base->parent->parent, "Enter Item: ", &list->items[list->selected*list->max_length], list->max_length, listAction);
             if(get_string == NULL)
                 return(-1);
             // Stash a pointer to this component context for the action handler
@@ -291,7 +294,7 @@ Component *listCreate(Window *win, int row, int col, int height, int width, char
     base->focus = listFocusMethod;
 
     // Set the focus to this new component
-    winSetFocus(win,base);
+    //winSetFocus(win,base);
 
     return((Component*)list);
 }
@@ -357,7 +360,7 @@ Component *chkboxCreate(Window *win, int row, int col, int width, char *label, b
     base->focus = chkboxFocusMethod;
 
     // Set the focus to this new component
-    winSetFocus(win,base);
+    //winSetFocus(win,base);
 
     return(base);
 }
@@ -426,7 +429,7 @@ local int strInputMethod(Component *base, int ch)
         case KEY_ENTER:
         case KEY_ESC:
             compNotifyAction(base, ch);
-            base->parent->next_focus(base->parent);
+            base->parent->next_focus(base->parent,true);
             break;
         default:
             if(isprint(ch))
@@ -484,7 +487,7 @@ Component *strCreate(Window *win, int row, int col, int width, char *label, char
     base->focus = strFocusMethod;
 
     // Set the focus to this new component
-    winSetFocus(win,base);
+    //winSetFocus(win,base);
     //base->focus(base);
 
     return(base);
@@ -548,7 +551,7 @@ local int intInputMethod(Component *base, int ch)
         case KEY_ENTER:
             if(base->notify_action)
                 base->notify_action(base, *integer->value);
-            base->parent->next_focus(base->parent);
+            base->parent->next_focus(base->parent,true);
             break;
         default:
             // Did not consume the input
@@ -598,7 +601,7 @@ Component *intCreate(Window *win, int row, int col, int width, char *label, int 
     base->focus = intFocusMethod;
 
     // Set the focus to this new component
-    winSetFocus(win,base);
+    //winSetFocus(win,base);
 
     return(base);
 }

@@ -381,6 +381,8 @@ local void texteditConfigureMethod(Component *base)
 local void texteditDestroyMethod(Component *base)
 {
     Text_Editor *editor = (Text_Editor *)base;
+    if(base->window->destroy)
+        base->window->destroy(base->window);
     if(editor->line != NULL)
         free(editor->line);
 }
@@ -404,7 +406,7 @@ Component *txteditCreate(Window *win, int row, int col, int height, int width, w
     
     Window *comp_window = winAllocate(row,col,height,width,NULL,false);
     if(win == NULL)
-            return(NULL);
+        return(NULL);
                     
     base->window = comp_window;
     editor->buffer = buffer;
