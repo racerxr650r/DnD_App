@@ -2,5 +2,12 @@
     "files.associations": {
         "curses.h": "c",
         "lcaf.h": "c"
-    }
+    },
+    "makefile.launchConfigurations": [
+        {
+            "cwd": "/home/john/Projects/DnD_App/build",
+            "binaryPath": "/home/john/Projects/DnD_App/build/DnD",
+            "binaryArgs": []
+        }
+    ]
 }

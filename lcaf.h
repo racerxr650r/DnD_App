@@ -204,6 +204,7 @@ typedef void (*Insert_Window)(struct window_t *ref, struct window_t *win);
 typedef void (*Remove_Window)(struct window_t *win);
 typedef void (*Stale_Window)(struct window_t *win);
 typedef App_Status (*First_Focus_Window)(struct window_t *win);
+typedef App_Status (*Last_Focus_Window)(struct window_t *win);
 typedef App_Status (*Set_Focus_Window)(struct window_t *win, struct component_t *component);
 typedef App_Status (*Next_Focus_Window)(struct window_t *win, bool top_window);
 typedef App_Status (*Prev_Focus_Window)(struct window_t *win, bool top_window);
@@ -316,8 +317,10 @@ typedef struct window_t
     /** @brief A function pointer to the window's cursor setting method. */
     Set_Cursor_Window   set_cursor;
 
-    /** @brief A function pointer to the window's previous focus method. */
+    /** @brief A function pointer to the window's first focus method. */
     First_Focus_Window  first_focus;
+    /** @brief A function pointer to the window's last focus method */
+    Last_Focus_Window   last_focus;
     /** @brief A function pointer to the window's focus setting method. */
     Set_Focus_Window    set_focus;
     /** @brief A function pointer to the window's next focus method. */
@@ -428,6 +431,8 @@ int winCopy(Window *src, Window *dst);
  */
 static inline bool isScreen(Window *this)
 {
+    if(this == NULL)
+        return(false);
     return(this->parent?false:true);
 }
 
@@ -575,8 +580,8 @@ static inline void winSetStale(Window *this)
 /**
  * @brief Sets the focus to the first component within a window.
  *
- * This inline function calls the window's set_focus method to set the focus to a
- * specific component.
+ * This inline function calls the window's fisrt_focus method to set the focus to
+ * the first component of this window and sub-windows.
  *
  * @param this A pointer to the window.
  */
@@ -585,6 +590,22 @@ static inline App_Status winFirstFocus(Window *this)
     if(this != NULL)
         if(this->first_focus != NULL)
             return(this->first_focus(this));
+    return(APP_NO_ACTION);
+}
+
+/**
+ * @brief Sets the focus to the last component within a window.
+ *
+ * This inline function calls the window's last_focus method to set the focus to
+ * the last component of this window and sub-windows.
+ *
+ * @param this A pointer to the window.
+ */
+static inline App_Status winLastFocus(Window *this)
+{
+    if(this != NULL)
+        if(this->last_focus != NULL)
+            return(this->last_focus(this));
     return(APP_NO_ACTION);
 }
 
@@ -1600,6 +1621,21 @@ static inline void txteditConfigure(Text_Editor *editor)
 Window *scrnCreate(void);
 
 /**
+ *@brief Gets a pointer to the screen instance.
+ *
+ * This function returns the a pointer to the screen instance for the given
+ * window.
+ * 
+ * @return A pointer to the root window for this window.
+ */
+static inline Window *scrnGet(Window *win)
+{
+    while(win->parent)
+        win = win->parent;
+    return(win);
+}
+
+/**
  * @brief Runs the main application loop for the screen.
  *
  * This function starts the main event loop for the application, handling
@@ -1688,11 +1724,11 @@ static inline void scrnWrite(Window *src)
  * This function creates a temporary popup window to display an error message
  * to the user. The window will automatically close after a specified duration.
  *
- * @param win A pointer to the screen (root window) on which to display the popup.
+ * @param reference A pointer to the screen (root window) on which to display the popup.
  * @param error_message A null-terminated string containing the error message to display.
  * @param milliseconds The number of milliseconds to display the popup window.
  */
-void popupError(Window *win, const char *error_message, int milliseconds);
+void popupError(Window *reference, const char *error_message, int milliseconds);
 
 /**
  * @brief Displays a message in a popup window.
@@ -1700,11 +1736,11 @@ void popupError(Window *win, const char *error_message, int milliseconds);
  * This function creates a temporary popup window to display a message to the
  * user. The window will automatically close after a specified duration.
  *
- * @param win A pointer to the screen (root window) on which to display the popup.
+ * @param reference A pointer to the screen (root window) on which to display the popup.
  * @param message A null-terminated string containing the message to display.
  * @param milliseconds The number of milliseconds to display the popup window.
  */
-void popupMessage(Window *win, const char *message, int milliseconds);
+void popupMessage(Window *reference, const char *message, int milliseconds);
 
 /**
  * @brief Displays a Yes/No confirmation popup window.
@@ -1712,12 +1748,12 @@ void popupMessage(Window *win, const char *message, int milliseconds);
  * This function creates a popup window that displays a message and prompts
  * the user to confirm with a Yes or No response.
  *
- * @param screen A pointer to the screen (root window) on which to display the popup.
+ * @param reference A pointer to the screen (root window) on which to display the popup.
  * @param message A null-terminated string containing the message to display.
  * @param yes_no_input A function pointer to the input handler for the Yes/No response.
  * @return A pointer to the newly created popup window on success, or NULL on failure.
  */
-Window *popupYesNo(Window *screen, const char *message, Input_Window yes_no_input);
+Window *popupYesNo(Window *reference, const char *message, Input_Window yes_no_input);
 
 /**
  * @brief Displays a popup window to get a string input from the user.
@@ -1726,14 +1762,14 @@ Window *popupYesNo(Window *screen, const char *message, Input_Window yes_no_inpu
  * It includes a label, an input field, and an optional handler for when the
  * user completes the input.
  *
- * @param screen A pointer to the screen (root window) on which to display the popup.
+ * @param reference A pointer to the screen (root window) on which to display the popup.
  * @param label A null-terminated string to be used as the input prompt label.
  * @param value A pointer to a pre-allocated character array to store the input string.
  * @param length The maximum length of the input string buffer.
  * @param handler A function pointer to an optional input handler that will be called when the user completes the input.
  * @return A pointer to the newly created string component on success, or NULL on failure.
  */
-Component *popupGetString(Window *screen, char * label, char *value, int length, Input_Component handler);
+Component *popupGetString(Window *reference, char * label, char *value, int length, Input_Component handler);
 
 // Hardware Abstraction *******************************************************
 // Function Prototypes --------------------------------------------------------

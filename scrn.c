@@ -97,6 +97,7 @@ Window *scrnCreate()
     // If allocating the screen buffer is successful...
     if((screen = winAllocate(0, 0, rows, cols, NULL, false)) != NULL)
     {
+        screen->label = "Base_Screen";
         screen->initialize = scrnInitializeMethod;
         screen->update = scrnUpdateMethod;
         screen->write = scrnWriteMethod;
@@ -110,7 +111,7 @@ Window *scrnCreate()
 void scrnDestroyWindows(Window *screen)
 {
     // Scan the windows and destroy the marked ones
-    Window *win = screen->bottom_window;
+    Window *win = screen->top_window;
     while(win != NULL)
     {
         Window *next = win->next;

@@ -30,7 +30,7 @@
 
 // Internal Function Prototypes ***********************************************
 int dndCalcModifier(int score, int proficiency_modifier);
-void dndCalcDependincies(Window *win);
+void dndCalcDependencies(Window *win);
 
 int get_int_input(int y, int x, const char *prompt);
 void get_string_input(int y, int x, const char *prompt, char *buffer, int max_length);
@@ -70,24 +70,23 @@ int main(int argc, char *argv[])
 
     // Create all app windows and register global app input handler
     Window *screen = scrnCreate();
+    if(screen == NULL)
+        return(-1);
+
+    // Hook notifications to implement application funcitionality
+    // Create the application windows
     screen->configure = dndCreateWindows;
+    // Handle the application wide keystrokes
     screen->notify_input = dndInput;
+    // Calculate all dependencies
+    screen->notify_update = dndCalcDependencies;
 
+    // Run the screen
+    scrnRun(screen);
 
-    if(screen != NULL)
-    {
-        // Hook the update notification to calculate all dependencies
-        screen->notify_update = dndCalcDependincies;
-
-        // Run the screen
-        scrnRun(screen);
-
-        // clean up windowFW
-        scrnDestroy(screen);
-        ret = 0;
-    }
-    else
-        ret = -1;
+    // clean up
+    scrnDestroy(screen);
+    ret = 0;
 
     dndFreeSpells(spells, num_spells);
 
@@ -166,7 +165,7 @@ int dndCalcModifier(int score, int proficiency_modifier)
     return ((score - 10) / 2) + proficiency_modifier;
 }
 
-void dndCalcDependincies(Window *win)
+void dndCalcDependencies(Window *win)
 {
     // Do this once here so this code is not spread all over the place and
     // duplicated in several places. Order is important.
@@ -282,7 +281,7 @@ Window *dndCreateCharWin(Window *screen)
     win_desc->frame_type = FRAME_LIGHT_ARC;
     row = 1;
     col = 1;
-    //txteditCreate(win_desc,row,col,win_desc->height-2,win_desc->width-2,character.description,MAX_DESCR_LENGTH);
+    txteditCreate(win_desc,row,col,win_desc->height-2,win_desc->width-2,character.description,MAX_DESCR_LENGTH);
 
     // Abilities --------------------------------------------------------------
     Window *win_abilities = winCreate(win_base,1,42,8,36,NULL,true);
@@ -388,11 +387,10 @@ Window *dndCreateCharWin(Window *screen)
 
     // Languages --------------------------------------------------------------
     Window *win_languages = winCreate(win_base,18,55,5,23,NULL,true);
-    txtCreate(win_languages,0,2,"Languages");
     win_languages->frame_type = FRAME_LIGHT_ARC;
-    row = 1;
+    row = 0;
     col = 1;
-    listCreate(win_languages,row,col,3,20,NULL,(char *)character.languages,MAX_LANUAGES,MAX_LANGUAGE_DESCRIPTION);
+    listCreate(win_languages,row,col,3,20,"Langauages",(char *)character.languages,MAX_LANUAGES,MAX_LANGUAGE_DESCRIPTION);
 
     //winSetFocus(win, name);
     winFirstFocus(win_base);
@@ -625,12 +623,12 @@ int dndLoadCharActionHandler(Component *base, int ch)
         
         // Error handling
         if (file == NULL) 
-             popupError(base->parent->parent,"Character not found!", MESSAGE_DURATION);
+             popupError(base->parent,"Character not found!", MESSAGE_DURATION);
         else 
         {
             fread(&character, sizeof(Character), 1, file);
             fclose(file);
-            popupMessage(base->parent->parent,"Character loaded!", MESSAGE_DURATION);
+            popupMessage(base->parent,"Character loaded!", MESSAGE_DURATION);
             winMarkDestroy(base->parent);
         }
     }

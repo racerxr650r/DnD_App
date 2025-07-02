@@ -226,6 +226,9 @@ local void txteditUpdateMethod(Component *base)
         // Update the position of the cursor in the component window
         base->window->cur_row = editor->cursor_row - editor->top_visible;
         base->window->cur_col = editor->cursor_col - editor->left_visible;
+        // Update the position of the cursor in the parent window
+        base->parent->cur_row = base->window->cur_row + base->window->row;
+        base->parent->cur_col = base->window->cur_col + base->window->col;
     }
 
     // Wrte the component window to the parent window of the component
@@ -327,7 +330,10 @@ local void txteditFocusMethod(Component *base)
     // Set the cursor for the component window
     base->window->cur_col = editor->cursor_col - editor->left_visible;
     base->window->cur_row = editor->cursor_row - editor->top_visible;
-    winSetCursor(base->window,true);
+    // Set the cursor for the parent window
+    base->parent->cur_row = base->window->cur_row + base->window->row;
+    base->parent->cur_col = base->window->cur_col + base->window->col;
+    winSetCursor(base->parent,true);
 }
 
 local void texteditConfigureMethod(Component *base)

@@ -29,8 +29,12 @@ local int popupAction(Component *base, int ch)
     //winSetStale(base->parent->screen);
     return(0);
 }
-void popupError(Window *screen, const char *error_message, int milliseconds) 
+void popupError(Window *reference, const char *error_message, int milliseconds) 
 {
+    Window *screen = scrnGet(reference);
+    if(screen == NULL)
+        return;
+
     int width = strlen(error_message) + 2; // Add padding for the border
     int height = 3;
     int start_y = (screen->height - height) / 2;
@@ -56,8 +60,12 @@ void popupError(Window *screen, const char *error_message, int milliseconds)
 }
 
 // Pop Up Window User Functions -----------------------------------------------
-void popupMessage(Window *screen, const char *message, int milliseconds) 
+void popupMessage(Window *reference, const char *message, int milliseconds) 
 {
+    Window *screen = scrnGet(reference);
+    if(screen == NULL)
+        return;
+
     int width = strlen(message) + 2; // Add padding for the border
     int height = 3;
     int start_y = (screen->height - height) / 2;
@@ -82,8 +90,12 @@ void popupMessage(Window *screen, const char *message, int milliseconds)
     }
 }
 
-Window *popupYesNo(Window *screen, const char *message, Input_Window yes_no_input)
+Window *popupYesNo(Window *reference, const char *message, Input_Window yes_no_input)
 {
+    Window *screen = scrnGet(reference);
+    if(screen == NULL)
+        return(NULL);
+
     int width = strlen(message) + 2; // Add padding for the border
     int height = 3;
     int start_y = (screen->height - height) / 2;
@@ -108,8 +120,12 @@ Window *popupYesNo(Window *screen, const char *message, Input_Window yes_no_inpu
     return(win);
 }
 
-Component *popupGetString(Window *screen, char * label, char *value, int length, Input_Component handler)
+Component *popupGetString(Window *reference, char * label, char *value, int length, Input_Component handler)
 {
+    Window *screen = scrnGet(reference);
+    if(screen == NULL)
+        return(NULL);
+
     // --- Create popup window ---
     int width = strlen(label) + length + 2; // Add padding for the border
     int height = 3;
@@ -120,11 +136,13 @@ Component *popupGetString(Window *screen, char * label, char *value, int length,
     if(win == NULL)
         return(NULL);
     win->frame_type = FRAME_LIGHT_ARC;
+    winMoveTop(win);
 
     Component *base = strCreate(win,1,1,20,label,value,length);
     if(base == NULL)
         return(NULL);
     base->notify_action = handler;
 
+    winFirstFocus(win);
     return(base);
 }

@@ -176,7 +176,7 @@ local void listUpdateMethod(Component *base)
     // Display the label
     int row = base->row;
     int col = base->col;
-    winPrint(base->parent,row++,col,"%s---",base->label);
+    winPrint(base->parent,row++,col,"%s",base->label);
 
     // Display the rows of items visible
     for(int i = list->top_visible; i < list->size && i < list->top_visible+base->height; i++)
@@ -212,7 +212,7 @@ local int listAction(Component *base, int ch)
     else if(list->size == list->max_items)
     {
         --list->selected;
-        popupError(base->parent->parent, "Max List Items Reached",MESSAGE_DURATION);
+        popupError(base->parent, "Max List Items Reached",MESSAGE_DURATION);
     }
     winMarkDestroy(base->parent);
     return(1);
@@ -235,7 +235,7 @@ local int listInputMethod(Component *base, int ch)
             break;
         case '\n':
         case '\r':
-            get_string = popupGetString(base->parent->parent, "Enter Item: ", &list->items[list->selected*list->max_length], list->max_length, listAction);
+            get_string = popupGetString(base->parent, "Enter Item: ", &list->items[list->selected*list->max_length], list->max_length, listAction);
             if(get_string == NULL)
                 return(-1);
             // Stash a pointer to this component context for the action handler
@@ -429,7 +429,9 @@ local int strInputMethod(Component *base, int ch)
         case KEY_ENTER:
         case KEY_ESC:
             compNotifyAction(base, ch);
-            base->parent->next_focus(base->parent,true);
+            if(base->parent->mark_destroy != true)
+                winNextFocus(base->parent);
+                //base->parent->next_focus(base->parent,true);
             break;
         default:
             if(isprint(ch))
