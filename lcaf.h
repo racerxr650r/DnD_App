@@ -193,7 +193,7 @@ struct window_t;
 struct component_t;
 
 typedef int (*Initialize_Window)(struct window_t *win);
-typedef int (*Configure_Window)(struct window_t *win);
+typedef App_Status (*Configure_Window)(struct window_t *win);
 typedef void (*Set_Cursor_Window)(struct window_t *win, bool enable);
 typedef void (*Frame_Window)(struct window_t *win);
 typedef void (*Update_Window)(struct window_t *win);
@@ -345,6 +345,10 @@ typedef struct window_t
     /** @brief A function pointer to the window's write method. */
     Write_Window        write;
 
+    /** @brief A function pointer to the window's initialization notification handler. */
+    Initialize_Window  notify_initialize;
+    /** @brief A function pointer to the window's configuration notification handler. */
+    Configure_Window  notify_configure;
     /** @brief A function pointer to the window's input notification handler. */
     Input_Window  notify_input;
     /** @brief A function pointer to the window's action notification handler. */
@@ -443,11 +447,17 @@ static inline bool isScreen(Window *this)
  *
  * @param this A pointer to the window to initialize.
  */
-static inline void winInitialize(Window *this)
+static inline App_Status winInitialize(Window *this)
 {
     if(this != NULL)
+    {
         if(this->initialize != NULL)
-            this->initialize(this);
+            return(this->initialize(this));
+    }
+    else
+        return(APP_INVALID_PARAMETER);
+
+    return(APP_NO_ACTION);
 }
 
 /**
@@ -457,12 +467,17 @@ static inline void winInitialize(Window *this)
  *
  * @param this A pointer to the window to configure.
  */
-static inline int winConfigure(Window *this)
+static inline App_Status winConfigure(Window *this)
 {
     if(this != NULL)
+    {
         if(this->configure != NULL)
             return(this->configure(this));
-    return(0);
+    }
+    else
+        return(APP_INVALID_PARAMETER);
+
+    return(APP_NO_ACTION);
 }
 
 /**
@@ -829,6 +844,31 @@ static inline void winMarkDestroy(Window *this)
 }
 
 /**
+ * @brief Notifies the window of a configuration event.
+ *
+ * This inline function calls the window's configuration notification handler
+ * if it exists.A configuration event is called when the data that defines the
+ * window or it's parent windows (for example, the base screen window) has been
+ * updated. Therefore the window should update anything based on this data. The
+ * window should assume that it and any previously created sub windows and
+ * components already exist.
+ *
+ * @param this A pointer to the window to notify.
+ */
+static inline App_Status winNotifyConfigure(Window *this)
+{
+    if(this != NULL)
+    {
+        if(this->notify_configure != NULL)
+            return(this->notify_configure(this));
+    }
+    else
+        return(APP_INVALID_PARAMETER);
+
+    return(APP_NO_ACTION);
+}
+
+/**
  * @brief Notifies the window of an action event.
  *
  * This inline function calls the window's action notification handler if it exists.
@@ -947,7 +987,7 @@ static inline void winNotifyDestroy(Window *this)
 
 // UI Component ***************************************************************
 // Data/Function Types --------------------------------------------------------
-typedef void (*Configure_Component)(struct component_t *component);
+typedef App_Status (*Configure_Component)(struct component_t *component);
 typedef void (*Update_Component)(struct component_t *component);
 typedef int  (*Input_Component)(struct component_t *component,int input);
 typedef void (*Focus_Component)(struct component_t *component);
@@ -1197,12 +1237,12 @@ static inline int compInput(Component *this, int input)
  *
  * @param this A pointer to the component to configure.
  */
-static inline void compConfigure(Component *this)
+static inline App_Status compConfigure(Component *this)
 {
     if(this != NULL)
         if(this->configure != NULL)
-            this->configure(this);
-    return;
+            return(this->configure(this));
+    return(APP_NO_ACTION);
 }
 
 /**

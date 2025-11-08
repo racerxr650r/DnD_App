@@ -95,7 +95,7 @@ local int txteditSetCursorPtr(Text_Editor *editor, wchar_t *ptr)
         return(-1);
 
     int row = 0;
-    int col =0;
+    int col = 0;
 
     if(ptr > editor->buffer)
     {
@@ -217,8 +217,8 @@ local void txteditUpdateMethod(Component *base)
     winClear(base->window);
 
     // Draw the text window
-    for(int i = 0; i < editor->rows; i++)
-        winWprint(base->window, i, 0, L"%ls", editor->line[i] + editor->left_visible);
+    for(int i = 0; i < editor->height && i < editor->rows - editor->top_visible; i++)
+        winWprint(base->window, i, 0, L"%ls", editor->line[i+editor->top_visible] + editor->left_visible);
 
     // If this component has focus...
     if(base->parent->focus == base)
@@ -234,7 +234,7 @@ local void txteditUpdateMethod(Component *base)
     // Wrte the component window to the parent window of the component
     winWrite(base->parent,base->window);
 
-    winPrint(base->parent,base->parent->height-1, 2, "Row-%d/%d Col-%d/%d Line-%d Buffer-%d",editor->cursor_row,editor->rows,editor->cursor_col,editor->cols,texteditLineLen(editor,editor->cursor_row),wcslen(editor->buffer));
+    winPrint(base->parent,base->parent->height-1, 2, "Row-%d/%d Col-%d/%d Top-%d Left-%d",editor->cursor_row+1,editor->rows,editor->cursor_col,editor->cols,editor->top_visible+1,editor->left_visible+1); //texteditLineLen(editor,editor->cursor_row),wcslen(editor->buffer)
 }
 
 local int txteditInputMethod(Component *base, int ch)
@@ -336,10 +336,10 @@ local void txteditFocusMethod(Component *base)
     winSetCursor(base->parent,true);
 }
 
-local void texteditConfigureMethod(Component *base)
+local App_Status texteditConfigureMethod(Component *base)
 {
     if(base == NULL)
-        return;
+        return(APP_INVALID_PARAMETER);
 
     Text_Editor *editor = (Text_Editor *)base;
 
@@ -350,26 +350,34 @@ local void texteditConfigureMethod(Component *base)
     if(editor->line)
         free(editor->line);
 
+    // Allocate a single line
     editor->line = malloc(sizeof(wchar_t *));
+    // If memory allocation failed...
+    if(editor->line == NULL)
+        return(APP_MEMORY_ALLOC_FAIL);
+    // Assign the line to the start of the buffer
     editor->line[0] = editor->buffer;
     
     int i = 0;
     int column = 0;
+    // Step through the buffer until you reach the maximum sized or a '\0'
     while(i < editor->buffer_size && editor->buffer[i] != L'\0')
     {
         // If newline...
         if(editor->buffer[i] == L'\n')
         {
+            // Reallocate the line array to add the new line
             editor->line = realloc(editor->line,sizeof(wchar_t *)*(editor->rows+1));
+            // If the reallocate fails...
+            if(editor->line == NULL)
+                return(APP_MEMORY_ALLOC_FAIL);
+            // Assign the new line to the appropriate place in the buffer
             editor->line[editor->rows++] = &editor->buffer[i+1];
             column = 0;
         }
         // Else if this is not a carriage return...
         else if (iswprint(editor->buffer[i]))
         {
-            //if(column == 0)
-            //    editor->line[editor->rows] = &editor->buffer[i];
-
             if(!editor->rows)
                 editor->rows = 1;
             ++column;
@@ -382,6 +390,8 @@ local void texteditConfigureMethod(Component *base)
     // If we have reached the end of the buffer...
     if(i == editor->buffer_size)
         editor->buffer[i-1] = L'\0';
+
+    return(APP_OK);
 }
 
 local void texteditDestroyMethod(Component *base)

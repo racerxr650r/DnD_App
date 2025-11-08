@@ -64,7 +64,71 @@ local void winFrameMethod(Window *this)
     for(col = 1; col < this->width-1; col++)
         this->buffer[(row*this->width)+col] = frame_symbols[this->frame_type][HORIZONTAL];
     this->buffer[(row*this->width)+col] = frame_symbols[this->frame_type][BOTTOM_RIGHT];
-}    
+}
+
+local App_Status winInitializeMethod(Window *this)
+{
+    App_Status status;
+
+    if(this == NULL)
+        return(APP_INVALID_PARAMETER);
+
+    Window *sub_win = this->top_window;
+    while(sub_win)
+    {
+        status = winInitialize(sub_win);
+        if(status < APP_NO_ACTION)
+            return(status);
+        sub_win = sub_win->next;
+    }
+
+    status = winNotifyConfigure(this);
+    if(status < APP_NO_ACTION)
+        return(status);
+
+    Component *comp = this->component_head;
+    while(comp)
+    {
+        status = compConfigure(comp);
+        if(status < APP_NO_ACTION)
+            return(status);
+        comp = comp->next;
+    }
+
+    return(APP_OK);
+}
+
+local App_Status winConfigureMethod(Window *this)
+{
+    App_Status status;
+
+    if(this == NULL)
+        return(APP_INVALID_PARAMETER);
+
+    Window *sub_win = this->top_window;
+    while(sub_win)
+    {
+        status = winConfigure(sub_win);
+        if(status < APP_NO_ACTION)
+            return(status);
+        sub_win = sub_win->next;
+    }
+
+    status = winNotifyConfigure(this);
+    if(status < APP_NO_ACTION)
+        return(status);
+
+    Component *comp = this->component_head;
+    while(comp)
+    {
+        status = compConfigure(comp);
+        if(status < APP_NO_ACTION)
+            return(status);
+        comp = comp->next;
+    }
+
+    return(APP_OK);
+}
 
 local void winUpdateMethod(Window *this)
 {
@@ -898,8 +962,8 @@ Window *winAllocate(int row, int col, int height, int width, char *label, bool b
     window->parent = NULL;
 
     window->initialize = NULL;
-    window->configure = NULL;
     window->frame = winFrameMethod;
+    window->configure = winConfigureMethod;
     window->update = winUpdateMethod;
     window->write = winWriteMethod;
     window->input = winInputMethod;

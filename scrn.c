@@ -98,7 +98,6 @@ Window *scrnCreate()
     if((screen = winAllocate(0, 0, rows, cols, NULL, false)) != NULL)
     {
         screen->label = "Base_Screen";
-        screen->initialize = scrnInitializeMethod;
         screen->update = scrnUpdateMethod;
         screen->write = scrnWriteMethod;
         screen->destroy = scrnDestroyMethod;
@@ -130,7 +129,7 @@ local void scrnTick(Window *screen)
     // Delay for 1ms
     usleep(900);
 
-    Window *win = screen->bottom_window;
+    Window *win = screen->top_window;
     while(win != NULL)
     {
         if(win->notify_tick)
@@ -196,8 +195,9 @@ int scrnRun(Window *screen)
     if(screen == NULL)
         return(-1);
 
-    // If the screen has an initialize handler...
-    winInitialize(screen);
+    // Initialize the display
+    halInitialize();
+
     // If the screen has a configure handler...
     winConfigure(screen);
         

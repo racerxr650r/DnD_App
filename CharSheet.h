@@ -40,7 +40,7 @@
 #define MAX_EQUIPMENT_DESCRIPTION   40
 #define MAX_TREASURE                40
 #define MAX_TREASURE_DESCRIPTION    40
-#define MAX_LANUAGES                10
+#define MAX_LANGUAGES               10
 #define MAX_LANGUAGE_DESCRIPTION    40
 
 #define MAX_TEXT_FIELD_LENGTH       41
@@ -216,7 +216,7 @@ typedef struct
     int         armor_class;
     int         speed;
     int         initiative;
-    char        languages[20][MAX_TEXT_FIELD_LENGTH];
+    wchar_t     languages[MAX_LANGUAGES*MAX_LANGUAGE_DESCRIPTION];
     int         passive_perception;
     int         passive_stealth; 
     int         passive_insight;

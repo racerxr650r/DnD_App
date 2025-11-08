@@ -160,6 +160,16 @@ Component *compCreate(Component *component, Window *win, int row, int col, int h
 // List Component *************************************************************
 #define list_item_selected(list)    &list->items[list->selected*list->max_length]
 
+/*local App_Status listConfigureMethod(Component *base)
+{
+    List *list = (List *)base;
+
+    list->top_visible = 0;
+    list->selected = 0;
+    
+    return(APP_OK);
+}*/
+
 local void listUpdateMethod(Component *base)
 {
     List *list = (List *)base;

@@ -75,7 +75,7 @@ int main(int argc, char *argv[])
 
     // Hook notifications to implement application funcitionality
     // Create the application windows
-    screen->configure = dndCreateWindows;
+    screen->notify_configure = dndCreateWindows;
     // Handle the application wide keystrokes
     screen->notify_input = dndInput;
     // Calculate all dependencies
@@ -387,10 +387,14 @@ Window *dndCreateCharWin(Window *screen)
 
     // Languages --------------------------------------------------------------
     Window *win_languages = winCreate(win_base,18,55,5,23,NULL,true);
+    txtCreate(win_languages,0,2,"Languages");
     win_languages->frame_type = FRAME_LIGHT_ARC;
-    row = 0;
+    row = 1;
     col = 1;
-    listCreate(win_languages,row,col,3,20,"Langauages",(char *)character.languages,MAX_LANUAGES,MAX_LANGUAGE_DESCRIPTION);
+    txteditCreate(win_languages,row,col,win_languages->height-2,
+                    win_languages->width-2,character.languages,
+                    MAX_LANGUAGES * MAX_LANGUAGE_DESCRIPTION);
+    //listCreate(win_languages,row,col,3,20,"Langauages",(char *)character.languages,MAX_LANGUAGES,MAX_LANGUAGE_DESCRIPTION);
 
     //winSetFocus(win, name);
     winFirstFocus(win_base);
@@ -628,6 +632,7 @@ int dndLoadCharActionHandler(Component *base, int ch)
         {
             fread(&character, sizeof(Character), 1, file);
             fclose(file);
+            winConfigure(base->parent->parent);
             popupMessage(base->parent,"Character loaded!", MESSAGE_DURATION);
             winMarkDestroy(base->parent);
         }

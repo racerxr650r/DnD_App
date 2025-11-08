@@ -136,7 +136,7 @@ Component *popupGetString(Window *reference, char * label, char *value, int leng
     if(win == NULL)
         return(NULL);
     win->frame_type = FRAME_LIGHT_ARC;
-    winMoveTop(win);
+        winMoveTop(win);
 
     Component *base = strCreate(win,1,1,20,label,value,length);
     if(base == NULL)
